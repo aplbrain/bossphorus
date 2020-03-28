@@ -1,0 +1,21 @@
+[package]
+name = "bossphorus"
+version = "0.0.1"
+authors = ["Jordan Matelsky <j6k4m8@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+blosc = "0.1.2"
+ndarray = "0.13.0"
+reqwest = "0.10.4"
+rocket = "0.4.4"
+rocket_codegen = "0.4.4"
+serde = {version = "1.0.105", features=["derive"]}
+serde_derive = "1.0.105"
+
+[dependencies.rocket_contrib]
+version = "0.4.4"
+default-features = false
+features = ["json"]
