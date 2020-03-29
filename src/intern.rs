@@ -1,17 +1,29 @@
 pub mod intern {
+    /// This module is intended to begin to mirror the intern Python library.
     use ndarray::{s, Array, Array3};
-    use reqwest::Client;
-    // use reqwest::StatusCode;
+    use reqwest::blocking::Client;
 
+    /// Describe min- and max- pixel coordinates along a dimension.
     type Extents<'a> = (i32, i32);
 
     pub struct BossRemote {
+        /// A BossRemote analog to Python's `intern.remote.boss.BossRemote`.
         protocol: String,
         host: String,
         token: String,
         client: Client,
     }
 
+    /// Parse a URI and return a collection, experiment, and channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `boss_uri` - A URI like `bossdb://col/exp/chan`
+    ///
+    /// # Returns
+    ///
+    /// * Collection, experiment, and channel strings
+    ///
     fn parse_bossdb_uri(boss_uri: String) -> (String, String, String) {
         let boss_components = boss_uri.split("://").collect::<Vec<&str>>()[1].to_string();
         let col_exp_chan = boss_components.split("/").collect::<Vec<&str>>();
@@ -23,6 +35,14 @@ pub mod intern {
     }
 
     impl BossRemote {
+        /// A BossRemote handles its own authentication, etc.
+        ///
+        /// # Arguments
+        ///
+        /// * `protocol` - e.g. "https"
+        /// * `host` - e.g. "bossdb.io"
+        /// * `token` - e.g. "public"
+        ///
         pub fn new(protocol: String, host: String, token: String) -> BossRemote {
             let br = BossRemote {
                 protocol,
@@ -37,6 +57,20 @@ pub mod intern {
             format!("{}://{}/{}/v1/", self.protocol, self.host, suffix)
         }
 
+        /// Get a cutout from the bosslike remote.
+        ///
+        /// # Arguments
+        ///
+        /// * `boss_uri` - String
+        /// * `res` - u8
+        /// * `xs` - Extents
+        /// * `ys` - Extents
+        /// * `zs` - Extents
+        ///
+        /// # Returns
+        ///
+        /// * Array3
+        ///
         pub fn get_cutout(
             &self,
             boss_uri: String,
@@ -44,7 +78,7 @@ pub mod intern {
             xs: Extents,
             ys: Extents,
             zs: Extents,
-        ) -> Array3<u8> {
+        ) -> Result<Array3<u8>, reqwest::Error> {
             let (col, exp, chan) = parse_bossdb_uri(boss_uri);
             let url = self.build_url(format!(
                 "cutout/{col}/{exp}/{chan}/{res}/{xs_start}:{xs_stop}/{ys_start}:{ys_stop}/{zs_start}:{zs_stop}",
@@ -53,17 +87,25 @@ pub mod intern {
                 ys_start = ys.0, ys_stop = ys.1,
                 zs_start = zs.0, zs_stop = zs.1,
             ));
-            let response = self
+            let mut resp = self
                 .client
                 .get(&url)
                 .header("Authorization", format!("token {}", self.token))
-                .send();
-            // match response.status() {
-            //     StatusCode::OK => response.text(),
-            //     err => panic!(err.to_string()),
-            // }
-
-            // return Array3.from(vec![]);
+                .send()?;
+            if resp.status().is_success() {
+                let mut buf = Vec::new();
+                std::io::copy(&mut resp, &mut buf).unwrap();
+                return Ok(Array::from_shape_vec(
+                    (
+                        (zs.1 - zs.0) as usize,
+                        (ys.1 - ys.0) as usize,
+                        (zs.1 - zs.0) as usize,
+                    ),
+                    buf,
+                )
+                .unwrap());
+            }
+            panic!("nokay")
         }
     }
 }

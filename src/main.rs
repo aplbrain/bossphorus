@@ -4,7 +4,7 @@
 extern crate rocket;
 
 mod data_manager;
-// mod intern;
+mod intern;
 
 use data_manager::data_manager::{DataManager, Vector3};
 use ndarray::Array;
@@ -19,6 +19,10 @@ use std::io::{Cursor, Read};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChannelMetadata {
+    /// Metadata corresponding to a channel.
+    ///
+    /// A struct holder for the metadata returned by Bosslikes at the
+    /// channel-metadata endpoint.
     name: String,
     description: String,
     experiment: String,
@@ -32,6 +36,11 @@ struct ChannelMetadata {
     related: Vec<String>,
 }
 
+/// Convert a colon-delimited extents variable into a `Vec<u64>` of len=2.
+///
+/// # Arguments:
+///
+/// * `string_value` - A string that contains two integers separated by a colon
 fn colon_delim_str_to_extents(string_value: &RawStr) -> Vec<u64> {
     string_value
         .split(":")

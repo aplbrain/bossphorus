@@ -1,5 +1,14 @@
 pub mod data_manager {
-
+    /// Data management module.
+    ///
+    /// Handles data IO from disk, or from other sources. In the future, this
+    /// needs to be refactored into a set of Traits I believe... Still working
+    /// on my Rust-fluency here.
+    ///
+    /// In short, this currently handles all of the data IO from cuboids. No
+    /// one else should have to worry about slicing and dicing, but if you do
+    /// want to, you can use `data_manager::get_cuboids_and_indices`, which is
+    /// a lot prettier than my Python implementation, if I do say so myself.
     use crate::intern;
 
     use ndarray::{s, Array, Array3};
@@ -12,6 +21,12 @@ pub mod data_manager {
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Vector3 {
+        /// A vector of X, Y, and Z members.
+        ///
+        /// Partially used as a way to learn Rust structs; I imagine there is a
+        /// more elegant stdlib way to encode this. But it sure is useful when
+        /// you're swapping back and forth between XYZ coordinate ordering and
+        /// ZYX C-ordered strides!
         pub x: u64,
         pub y: u64,
         pub z: u64,
@@ -24,10 +39,39 @@ pub mod data_manager {
     }
 
     pub struct DataManager {
+        /// A DataManager. Specifically, a filesystem data manager.
+        ///
+        /// The closest Python analog of this is the FileSystemStorageManager
+        /// which handles cuboid IO from disk. I am absolutely floored at how
+        /// much faster this one is than the Python version. They should have
+        /// sent a poet.
         file_path: String,
         cuboid_size: Vector3,
     }
 
+    /// Get a mapping of cuboid indices to the cutout indices within it.
+    ///
+    /// This sounds a lot more complicated than it actually is, and the
+    /// code for it is way more complicated than it feels like it should need
+    /// to be.
+    ///
+    /// In essence, all this does is convert global cutout coordinates into a
+    /// bunch of individual cuboids' cutout coordinates. For a large cutout,
+    /// most of these will include the entire cuboid (so the value in that kv
+    /// pair will be the same as `cuboid_size`). This is the sort of function
+    /// that is worth writing once and then never again, so I've written it
+    /// here again.
+    ///
+    /// # Arguments
+    ///
+    /// * `coords_start` - A vector that indicates the global start position
+    /// * `coords_stop` - A vector that indicates the global stop indices
+    /// * `cuboid_size` - A vector3 that indicates the XYZ cuboid size on disk
+    ///
+    /// # Returns
+    ///
+    /// * Mapping of cuboid ID to cutouts `(Vector3, Vector3)`
+    ///
     pub fn get_cuboids_and_indices(
         coords_start: Vector3,
         coords_stop: Vector3,
@@ -105,6 +149,10 @@ pub mod data_manager {
     }
 
     impl DataManager {
+        /// A DataManager handles data IO from disk (and eventually cache).
+        ///
+        /// Create a new DataManager with a file_path on disk to which cuboids
+        /// will be written, and a default cuboid_size (e.g. 512*512*16).
         pub fn new(file_path: String, cuboid_size: Vector3) -> DataManager {
             return DataManager {
                 file_path,
@@ -112,10 +160,22 @@ pub mod data_manager {
             };
         }
 
+        /// TODO: `has_data`
         // fn has_data(&self) -> bool {
         //     return true;
         // }
 
+        /// Get data from a specified cutout region.
+        ///
+        /// # Arguments
+        ///
+        /// * `origin` - The start position of the cutout (global coords)
+        /// * `destination` - The end position in global coords
+        ///
+        /// # Returns
+        ///
+        /// * 3D Array
+        ///
         pub fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
             let cuboids = get_cuboids_and_indices(origin, destination, self.cuboid_size);
 
@@ -176,6 +236,18 @@ pub mod data_manager {
             return large_array;
         }
 
+        /// Upload data (write to the files).
+        ///
+        /// # Arguments
+        ///
+        /// * `data` - The good stuff
+        /// * `origin` - The start position of the cutout (global coords)
+        /// * `destination` - The end position in global coords
+        ///
+        /// # Returns
+        ///
+        /// * Boolean of success
+        ///
         pub fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
             let cuboids = get_cuboids_and_indices(
                 origin,
