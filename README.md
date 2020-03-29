@@ -8,3 +8,7 @@ This is a reimplementation of the [Bossphorus](https://github.com/aplbrain/bossp
 ## Why?
 
 It is bewildering how much faster this is than the Python implementation.
+
+## Feature Parity
+
+I'm planning to add a feature-parity document once it's not embarrassing.
