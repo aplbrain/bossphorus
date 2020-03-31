@@ -84,6 +84,7 @@ pub mod remote {
                 ys_start = ys.0, ys_stop = ys.1,
                 zs_start = zs.0, zs_stop = zs.1,
             ));
+            println!("{}", url);
             let mut resp = self
                 .client
                 .get(&url)

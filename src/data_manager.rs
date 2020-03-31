@@ -324,7 +324,16 @@ pub mod data_manager {
                     // TODO: We should be abstracting cache management; just
                     //       dumping data back into the datamanager is ugly
                     //       and will be impossible to maintain.
-                    self.put_data(uri.clone(), res, origin, array.clone());
+                    self.put_data(
+                        uri.clone(),
+                        res,
+                        Vector3 {
+                            x: x_cuboid_start,
+                            y: y_cuboid_start,
+                            z: z_cuboid_start,
+                        },
+                        array.clone(),
+                    );
                 }
 
                 let new_data = array.slice(s![
