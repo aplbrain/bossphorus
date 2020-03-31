@@ -102,19 +102,18 @@ fn download(
     // TODO: Assert that shape is positive
 
     // Perform the data-read:
-    let fm = ChunkedBloscFileDataManager::new(
-        format!(
-            "upload/{collection}/{experiment}/{channel}/{res}",
-            collection = collection,
-            experiment = experiment,
-            channel = channel,
-            res = res
-        ),
+    let fm = ChunkedBloscFileDataManager::new_with_layer(
+        "uploads".to_string(),
         Vector3 {
             x: 512,
             y: 512,
-            z: 64,
+            z: 16,
         },
+        Box::new(BossDBRelayDataManager::new(
+            "https".to_string(),
+            "api.bossdb.io".to_string(),
+            "public".to_string(),
+        )),
     );
 
     let result = fm
@@ -181,19 +180,18 @@ fn upload(
     let array = Array::from_shape_vec(shape_dimension, decompressed).unwrap();
 
     // Perform the data-write:
-    let fm = ChunkedBloscFileDataManager::new(
-        format!(
-            "upload/{collection}/{experiment}/{channel}/{res}",
-            collection = collection,
-            experiment = experiment,
-            channel = channel,
-            res = res
-        ),
+    let fm = ChunkedBloscFileDataManager::new_with_layer(
+        "uploads".to_string(),
         Vector3 {
             x: 512,
             y: 512,
-            z: 64,
+            z: 16,
         },
+        Box::new(BossDBRelayDataManager::new(
+            "https".to_string(),
+            "api.bossdb.io".to_string(),
+            "public".to_string(),
+        )),
     );
     let result = fm.put_data(
         format!("bossdb://{}/{}/{}", collection, experiment, channel),
@@ -215,88 +213,15 @@ fn not_found(_req: &Request) { /* .. */
 }
 
 fn main() {
-    // rocket::custom(
-    //     rocket::config::Config::build(rocket::config::Environment::Development)
-    //         .port(8090)
-    //         .unwrap(),
-    // )
-    // .mount(
-    //     "/v1",
-    //     routes![index, get_channel_metadata, upload, download],
-    // )
-    // .register(catchers![not_found])
-    // .launch();
-
-    let mgr = ChunkedBloscFileDataManager::new_with_layer(
-        "uploads".to_string(),
-        Vector3 {
-            x: 512,
-            y: 512,
-            z: 16,
-        },
-        Box::new(BossDBRelayDataManager::new(
-            "https".to_string(),
-            "api.bossdb.io".to_string(),
-            "public".to_string(),
-        )),
-    );
-
-    let data1 = mgr.get_data(
-        "bossdb://morgan2020/lgn/em".to_string(),
-        0,
-        Vector3 {
-            x: 80000,
-            y: 100016,
-            z: 5025,
-        },
-        Vector3 {
-            x: 80512,
-            y: 100528,
-            z: 5026,
-        },
-    );
-    mgr.put_data(
-        "bossdb://morgan2020/lgn/em".to_string(),
-        0,
-        Vector3 {
-            x: 80000,
-            y: 100016,
-            z: 5025,
-        },
-        data1.clone(),
-    );
-    let data2 = mgr.get_data(
-        "bossdb://morgan2020/lgn/em".to_string(),
-        0,
-        Vector3 {
-            x: 80000,
-            y: 100016,
-            z: 5025,
-        },
-        Vector3 {
-            x: 80512,
-            y: 100528,
-            z: 5026,
-        },
-    );
-
-    // let remote = intern::remote::BossRemote::new(
-    //     "https".to_string(),
-    //     "api.bossdb.io".to_string(),
-    //     "public".to_string(),
-    // );
-
-    // let data2 = remote
-    //     .get_cutout(
-    //         "bossdb://morgan2020/lgn/em".to_string(),
-    //         0,
-    //         (80000, 80512),
-    //         (100016, 100528),
-    //         (5025, 5026),
-    //     )
-    //     .unwrap();
-
-    println!("-----------");
-    println!("{:?}", data1);
-    println!("{:?}", data2);
+    rocket::custom(
+        rocket::config::Config::build(rocket::config::Environment::Development)
+            .port(8090)
+            .unwrap(),
+    )
+    .mount(
+        "/v1",
+        routes![index, get_channel_metadata, upload, download],
+    )
+    .register(catchers![not_found])
+    .launch();
 }
