@@ -4,8 +4,6 @@ version = "0.0.1"
 authors = ["Jordan Matelsky <j6k4m8@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 blosc = "0.1.2"
 ndarray = "0.13.0"
