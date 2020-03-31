@@ -41,19 +41,38 @@ pub mod data_manager {
         ///
         /// The only exception to this is the NullDataManager, which acts as a
         /// sink for failed requests.
-        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8>;
-        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool;
+        fn get_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            destination: Vector3,
+        ) -> ndarray::Array3<u8>;
+        fn put_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            data: ndarray::Array3<u8>,
+        ) -> bool;
 
         /// Default to returning a null data manager to catch failed requests.
-        fn get_next_layer(&self) -> &DataManager {
-            &NullDataManager {}
+        fn get_next_layer(&self) -> &dyn DataManager {
+            return &NullDataManager {};
         }
     }
 
+    /// A struct placeholder for the NullDataManager.
     pub struct NullDataManager {}
 
     impl DataManager for NullDataManager {
-        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+        fn get_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            destination: Vector3,
+        ) -> ndarray::Array3<u8> {
             return Array::zeros((
                 (destination.z - origin.z) as usize,
                 (destination.y - origin.y) as usize,
@@ -63,7 +82,13 @@ pub mod data_manager {
             // Alternatively:
             // panic!("Failed to put data.")
         }
-        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+        fn put_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            data: ndarray::Array3<u8>,
+        ) -> bool {
             panic!("Failed to put data.")
         }
     }
@@ -208,7 +233,13 @@ pub mod data_manager {
         ///
         /// * 3D Array
         ///
-        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+        fn get_data(
+            &self,
+            uri: String,
+            res: u8,
+            origin: Vector3,
+            destination: Vector3,
+        ) -> ndarray::Array3<u8> {
             let cuboids = get_cuboids_and_indices(origin, destination, self.cuboid_size);
 
             let mut large_array: Array3<u8> = Array::zeros((
@@ -240,6 +271,8 @@ pub mod data_manager {
                     // certainly be smarter about this.
 
                     array = self.get_next_layer().get_data(
+                        uri.clone(),
+                        res,
                         Vector3 {
                             x: (self.cuboid_size.x * cuboid_index.x) + start_ind.x,
                             y: (self.cuboid_size.x * cuboid_index.y) + start_ind.y,
@@ -290,7 +323,13 @@ pub mod data_manager {
         ///
         /// * Boolean of success
         ///
-        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+        fn put_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            data: ndarray::Array3<u8>,
+        ) -> bool {
             let cuboids = get_cuboids_and_indices(
                 origin,
                 Vector3 {
@@ -413,20 +452,32 @@ pub mod data_manager {
 
     impl DataManager for BossDBRelayDataManager {
         /// Get data from the upstream BossDB.
-        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+        fn get_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            destination: Vector3,
+        ) -> ndarray::Array3<u8> {
             let remote = BossRemote::new(
                 self.protocol.to_string(),
                 self.host.to_string(),
                 self.token.to_string(),
             );
 
-            remote.get_cutout(boss_uri: String, res: u8, xs: Extents, ys: Extents, zs: Extents)
+            // remote.get_cutout(boss_uri: String, res: u8, xs: Extents, ys: Extents, zs: Extents)
 
             ndarray::Array::zeros((10, 10, 10))
         }
 
         /// Unimplemented. Don't do this, I think.
-        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+        fn put_data(
+            &self,
+            uri: String,
+            resoluton: u8,
+            origin: Vector3,
+            data: ndarray::Array3<u8>,
+        ) -> bool {
             panic!("Failed to put data.")
         }
     }

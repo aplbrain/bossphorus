@@ -75,7 +75,7 @@ fn download(
     collection: &RawStr,
     experiment: &RawStr,
     channel: &RawStr,
-    res: u64,
+    res: u8,
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
@@ -115,7 +115,14 @@ fn download(
         },
     );
 
-    let result = fm.get_data(origin, destination).into_raw_vec();
+    let result = fm
+        .get_data(
+            format!("bossdb://{}/{}/{}", collection, experiment, channel),
+            res,
+            origin,
+            destination,
+        )
+        .into_raw_vec();
 
     let ctx = blosc::Context::new();
     let compressed: blosc::Buffer<u8> = ctx.compress(&result[..]);
@@ -135,7 +142,7 @@ fn upload(
     collection: &RawStr,
     experiment: &RawStr,
     channel: &RawStr,
-    res: u64,
+    res: u8,
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
@@ -186,7 +193,12 @@ fn upload(
             z: 64,
         },
     );
-    let result = fm.put_data(array, origin);
+    let result = fm.put_data(
+        format!("bossdb://{}/{}/{}", collection, experiment, channel),
+        res,
+        origin,
+        array,
+    );
 
     status::Created(format!("{}", result), Some("{}".to_string()))
 }
