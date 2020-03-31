@@ -54,7 +54,7 @@ pub mod remote {
         }
 
         fn build_url(&self, suffix: String) -> String {
-            format!("{}://{}/{}/v1/", self.protocol, self.host, suffix)
+            format!("{}://{}/v1/{}/", self.protocol, self.host, suffix)
         }
 
         /// Get a cutout from the bosslike remote.
@@ -75,9 +75,9 @@ pub mod remote {
             &self,
             boss_uri: String,
             res: u8,
-            xs: Extents,
-            ys: Extents,
-            zs: Extents,
+            xs: (u64, u64),
+            ys: (u64, u64),
+            zs: (u64, u64),
         ) -> Result<Array3<u8>, reqwest::Error> {
             let (col, exp, chan) = parse_bossdb_uri(boss_uri);
             let url = self.build_url(format!(
@@ -95,18 +95,23 @@ pub mod remote {
             if resp.status().is_success() {
                 let mut buf = Vec::new();
                 std::io::copy(&mut resp, &mut buf).unwrap();
-                // decompress
+                // decompress:
+                let decompressed: Vec<u8> = match unsafe { blosc::decompress_bytes(&buf[..]) } {
+                    Ok(a) => a,
+                    _ => unreachable!(),
+                };
                 return Ok(Array::from_shape_vec(
                     (
                         (zs.1 - zs.0) as usize,
                         (ys.1 - ys.0) as usize,
-                        (zs.1 - zs.0) as usize,
+                        (xs.1 - xs.0) as usize,
                     ),
-                    buf,
+                    decompressed,
                 )
                 .unwrap());
+            } else {
+                panic!(format!("{}: {:?}", url, resp.status()))
             }
-            panic!("nokay")
         }
     }
 }
