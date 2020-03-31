@@ -1,4 +1,4 @@
-pub mod intern {
+pub mod remote {
     /// This module is intended to begin to mirror the intern Python library.
     use ndarray::{s, Array, Array3};
     use reqwest::blocking::Client;
@@ -95,6 +95,7 @@ pub mod intern {
             if resp.status().is_success() {
                 let mut buf = Vec::new();
                 std::io::copy(&mut resp, &mut buf).unwrap();
+                // decompress
                 return Ok(Array::from_shape_vec(
                     (
                         (zs.1 - zs.0) as usize,

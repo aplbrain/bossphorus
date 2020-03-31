@@ -6,12 +6,11 @@ extern crate rocket;
 mod data_manager;
 mod intern;
 
-use data_manager::data_manager::{DataManager, Vector3};
+use data_manager::data_manager::{ChunkedBloscFileDataManager, DataManager, Vector3};
 use ndarray::Array;
 use rocket::data::Data;
 use rocket::http::RawStr;
-use rocket::response::status;
-use rocket::response::Stream;
+use rocket::response::{status, Stream};
 use rocket::Request;
 use rocket_contrib::json::Json;
 use serde_derive::{Deserialize, Serialize};
@@ -26,6 +25,7 @@ struct ChannelMetadata {
     name: String,
     description: String,
     experiment: String,
+    collection: String,
     default_time_sample: u64,
     _type: String,
     base_resolution: u64,
@@ -55,14 +55,15 @@ fn get_channel_metadata(
     channel: &RawStr,
 ) -> Json<ChannelMetadata> {
     Json(ChannelMetadata {
-        name: "em".to_string(),
+        name: channel.to_string(),
         description: "".to_string(),
-        experiment: "P7".to_string(),
+        experiment: experiment.to_string(),
+        collection: collection.to_string(),
         default_time_sample: 0,
         _type: "image".to_string(),
         base_resolution: 0,
         datatype: "uint8".to_string(),
-        creator: "bossadmin".to_string(),
+        creator: "bossphorus_cache".to_string(),
         sources: vec![],
         downsample_status: "DOWNSAMPLED".to_string(),
         related: vec![],
@@ -99,8 +100,14 @@ fn download(
     // TODO: Assert that shape is positive
 
     // Perform the data-read:
-    let fm = DataManager::new(
-        "upload".to_string(),
+    let fm = ChunkedBloscFileDataManager::new(
+        format!(
+            "upload/{collection}/{experiment}/{channel}/{res}",
+            collection = collection,
+            experiment = experiment,
+            channel = channel,
+            res = res
+        ),
         Vector3 {
             x: 512,
             y: 512,
@@ -165,8 +172,14 @@ fn upload(
     let array = Array::from_shape_vec(shape_dimension, decompressed).unwrap();
 
     // Perform the data-write:
-    let fm = DataManager::new(
-        "upload".to_string(),
+    let fm = ChunkedBloscFileDataManager::new(
+        format!(
+            "upload/{collection}/{experiment}/{channel}/{res}",
+            collection = collection,
+            experiment = experiment,
+            channel = channel,
+            res = res
+        ),
         Vector3 {
             x: 512,
             y: 512,

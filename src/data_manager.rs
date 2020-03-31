@@ -1,9 +1,7 @@
 pub mod data_manager {
     /// Data management module.
     ///
-    /// Handles data IO from disk, or from other sources. In the future, this
-    /// needs to be refactored into a set of Traits I believe... Still working
-    /// on my Rust-fluency here.
+    /// Handles data IO from disk, or from other sources.
     ///
     /// In short, this currently handles all of the data IO from cuboids. No
     /// one else should have to worry about slicing and dicing, but if you do
@@ -11,11 +9,11 @@ pub mod data_manager {
     /// a lot prettier than my Python implementation, if I do say so myself.
     use crate::intern;
 
+    use intern::remote::BossRemote;
     use ndarray::{s, Array, Array3};
     use std::collections::HashMap;
     use std::fmt;
     use std::fs;
-    // use std::fs::File;
     use std::io::prelude::*;
     use std::path::Path;
 
@@ -38,7 +36,39 @@ pub mod data_manager {
         }
     }
 
-    pub struct DataManager {
+    pub trait DataManager {
+        /// A DataManager must be able to get and put data.
+        ///
+        /// The only exception to this is the NullDataManager, which acts as a
+        /// sink for failed requests.
+        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8>;
+        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool;
+
+        /// Default to returning a null data manager to catch failed requests.
+        fn get_next_layer(&self) -> &DataManager {
+            &NullDataManager {}
+        }
+    }
+
+    pub struct NullDataManager {}
+
+    impl DataManager for NullDataManager {
+        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+            return Array::zeros((
+                (destination.z - origin.z) as usize,
+                (destination.y - origin.y) as usize,
+                (destination.x - origin.x) as usize,
+            ));
+
+            // Alternatively:
+            // panic!("Failed to put data.")
+        }
+        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+            panic!("Failed to put data.")
+        }
+    }
+
+    pub struct ChunkedBloscFileDataManager {
         /// A DataManager. Specifically, a filesystem data manager.
         ///
         /// The closest Python analog of this is the FileSystemStorageManager
@@ -148,18 +178,20 @@ pub mod data_manager {
         return cuboids;
     }
 
-    impl DataManager {
+    impl ChunkedBloscFileDataManager {
         /// A DataManager handles data IO from disk (and eventually cache).
         ///
         /// Create a new DataManager with a file_path on disk to which cuboids
         /// will be written, and a default cuboid_size (e.g. 512*512*16).
-        pub fn new(file_path: String, cuboid_size: Vector3) -> DataManager {
-            return DataManager {
+        pub fn new(file_path: String, cuboid_size: Vector3) -> ChunkedBloscFileDataManager {
+            return ChunkedBloscFileDataManager {
                 file_path,
                 cuboid_size,
             };
         }
+    }
 
+    impl DataManager for ChunkedBloscFileDataManager {
         /// TODO: `has_data`
         // fn has_data(&self) -> bool {
         //     return true;
@@ -176,7 +208,7 @@ pub mod data_manager {
         ///
         /// * 3D Array
         ///
-        pub fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
             let cuboids = get_cuboids_and_indices(origin, destination, self.cuboid_size);
 
             let mut large_array: Array3<u8> = Array::zeros((
@@ -203,12 +235,22 @@ pub mod data_manager {
                     )
                     .unwrap();
                 } else {
-                    // TODO: download data from upstream. This is a cache miss!
-                    array = Array::zeros((
-                        self.cuboid_size.z as usize,
-                        self.cuboid_size.y as usize,
-                        self.cuboid_size.x as usize,
-                    ));
+                    // TODO: This is a cache miss.
+                    // Right now, we just pass to the next layer, but we can
+                    // certainly be smarter about this.
+
+                    array = self.get_next_layer().get_data(
+                        Vector3 {
+                            x: (self.cuboid_size.x * cuboid_index.x) + start_ind.x,
+                            y: (self.cuboid_size.x * cuboid_index.y) + start_ind.y,
+                            z: (self.cuboid_size.x * cuboid_index.z) + start_ind.z,
+                        },
+                        Vector3 {
+                            x: (self.cuboid_size.x * cuboid_index.x) + stop_ind.x,
+                            y: (self.cuboid_size.x * cuboid_index.y) + stop_ind.y,
+                            z: (self.cuboid_size.x * cuboid_index.z) + stop_ind.z,
+                        },
+                    )
                 }
 
                 // Data cutouts
@@ -248,7 +290,7 @@ pub mod data_manager {
         ///
         /// * Boolean of success
         ///
-        pub fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
             let cuboids = get_cuboids_and_indices(
                 origin,
                 Vector3 {
@@ -326,6 +368,66 @@ pub mod data_manager {
                 }
             }
             return true;
+        }
+    }
+
+    pub struct BossDBRelayDataManager {
+        /// The BossDBRelayDataManager accepts requests for data and relays it
+        /// to a BossDB API using `intern-rust`.
+        ///
+        /// It currently relays the general-access token `public` instead of
+        /// the user's token, which is arguably Not The Correct Thing To Do but
+        /// certainly is way easier to implement.
+        /// Why is this hard? You don't know which user requested data to load
+        /// it into the cache in the first place. So if you then receive a
+        /// subsequent request, there's no guarantee that the new user actually
+        /// has permission to see that dataset.
+        /// In order to avoid this altogether, and to avoid permissions getting
+        /// out of sync with the upstream BossDB, better to just let this be
+        /// public-only. (If you want to change this behavior, you can always
+        /// change the token to that of a BossDB administrator, but...
+        /// obviously, watch out.)
+        token: String,
+        host: String,
+        protocol: String,
+    }
+
+    impl BossDBRelayDataManager {
+        /// A BossDBRelayDataManager handles data transactions with a BossDB
+        /// API (https://bossdb.org).
+        ///
+        /// # Arguments
+        ///
+        /// * `protocol` - Generally one of `http` or `https`
+        /// * `host` - The API root of the BossDB instance (e.g. `api.bossdb.io`)
+        /// * `token` - The token to use for ALL requests from this mgr
+        ///
+        pub fn new(protocol: String, host: String, token: String) -> BossDBRelayDataManager {
+            BossDBRelayDataManager {
+                protocol,
+                host,
+                token,
+            }
+        }
+    }
+
+    impl DataManager for BossDBRelayDataManager {
+        /// Get data from the upstream BossDB.
+        fn get_data(&self, origin: Vector3, destination: Vector3) -> ndarray::Array3<u8> {
+            let remote = BossRemote::new(
+                self.protocol.to_string(),
+                self.host.to_string(),
+                self.token.to_string(),
+            );
+
+            remote.get_cutout(boss_uri: String, res: u8, xs: Extents, ys: Extents, zs: Extents)
+
+            ndarray::Array::zeros((10, 10, 10))
+        }
+
+        /// Unimplemented. Don't do this, I think.
+        fn put_data(&self, data: ndarray::Array3<u8>, origin: Vector3) -> bool {
+            panic!("Failed to put data.")
         }
     }
 }
