@@ -73,14 +73,14 @@ pub mod data_manager {
             origin: Vector3,
             destination: Vector3,
         ) -> ndarray::Array3<u8> {
-            return Array::zeros((
-                (destination.z - origin.z) as usize,
-                (destination.y - origin.y) as usize,
-                (destination.x - origin.x) as usize,
-            ));
+            // return Array::zeros((
+            //     (destination.z - origin.z) as usize,
+            //     (destination.y - origin.y) as usize,
+            //     (destination.x - origin.x) as usize,
+            // ));
 
             // Alternatively:
-            // panic!("Failed to put data.")
+            panic!("Failed to get data.")
         }
         fn put_data(
             &self,
@@ -102,6 +102,7 @@ pub mod data_manager {
         /// sent a poet.
         file_path: String,
         cuboid_size: Vector3,
+        next_layer: Box<dyn DataManager>,
     }
 
     /// Get a mapping of cuboid indices to the cutout indices within it.
@@ -212,6 +213,19 @@ pub mod data_manager {
             return ChunkedBloscFileDataManager {
                 file_path,
                 cuboid_size,
+                next_layer: Box::new(NullDataManager {}),
+            };
+        }
+
+        pub fn new_with_layer(
+            file_path: String,
+            cuboid_size: Vector3,
+            next_layer: Box<dyn DataManager>,
+        ) -> ChunkedBloscFileDataManager {
+            return ChunkedBloscFileDataManager {
+                file_path,
+                cuboid_size,
+                next_layer,
             };
         }
     }
@@ -242,6 +256,8 @@ pub mod data_manager {
         ) -> ndarray::Array3<u8> {
             let cuboids = get_cuboids_and_indices(origin, destination, self.cuboid_size);
 
+            let boss_uri: Vec<&str> = uri.split("://").collect();
+
             let mut large_array: Array3<u8> = Array::zeros((
                 (destination.z - origin.z) as usize,
                 (destination.y - origin.y) as usize,
@@ -249,10 +265,22 @@ pub mod data_manager {
             ));
 
             for (cuboid_index, (start_ind, stop_ind)) in &cuboids {
-                let filename = format!("{}/{}", self.file_path, cuboid_index);
+                let filename = format!(
+                    "{}/{}/{}/{}",
+                    self.file_path, boss_uri[1], res, cuboid_index
+                );
 
                 let filepath = Path::new(&filename);
-                let mut array: Array3<u8>;
+
+                // Get the coordinates of this cuboid out of the cutout volume:
+                let z_start = ((cuboid_index.z * self.cuboid_size.z) + start_ind.z) - origin.z;
+                let z_stop = ((cuboid_index.z * self.cuboid_size.z) + stop_ind.z) - origin.z;
+                let y_start = ((cuboid_index.y * self.cuboid_size.y) + start_ind.y) - origin.y;
+                let y_stop = ((cuboid_index.y * self.cuboid_size.y) + stop_ind.y) - origin.y;
+                let x_start = ((cuboid_index.x * self.cuboid_size.x) + start_ind.x) - origin.x;
+                let x_stop = ((cuboid_index.x * self.cuboid_size.x) + stop_ind.x) - origin.x;
+
+                let array: Array3<u8>;
                 // Get existing data:
                 if filepath.exists() {
                     let data = fs::read(&filename).unwrap();
@@ -270,42 +298,49 @@ pub mod data_manager {
                     // Right now, we just pass to the next layer, but we can
                     // certainly be smarter about this.
 
+                    let z_cuboid_start = cuboid_index.z * self.cuboid_size.z;
+                    let z_cuboid_stop = (1 + cuboid_index.z) * self.cuboid_size.z;
+                    let y_cuboid_start = cuboid_index.y * self.cuboid_size.y;
+                    let y_cuboid_stop = (1 + cuboid_index.y) * self.cuboid_size.y;
+                    let x_cuboid_start = cuboid_index.x * self.cuboid_size.x;
+                    let x_cuboid_stop = (1 + cuboid_index.x) * self.cuboid_size.x;
+
                     array = self.get_next_layer().get_data(
-                        uri.clone(),
+                        boss_uri[1].to_string(),
                         res,
                         Vector3 {
-                            x: (self.cuboid_size.x * cuboid_index.x) + start_ind.x,
-                            y: (self.cuboid_size.x * cuboid_index.y) + start_ind.y,
-                            z: (self.cuboid_size.x * cuboid_index.z) + start_ind.z,
+                            x: x_cuboid_start,
+                            y: y_cuboid_start,
+                            z: z_cuboid_start,
                         },
                         Vector3 {
-                            x: (self.cuboid_size.x * cuboid_index.x) + stop_ind.x,
-                            y: (self.cuboid_size.x * cuboid_index.y) + stop_ind.y,
-                            z: (self.cuboid_size.x * cuboid_index.z) + stop_ind.z,
+                            x: x_cuboid_stop,
+                            y: y_cuboid_stop,
+                            z: z_cuboid_stop,
                         },
-                    )
+                    );
+
+                    // Put this cuboid into storage for next time:
+                    // TODO: We should be abstracting cache management; just
+                    //       dumping data back into the datamanager is ugly
+                    //       and will be impossible to maintain.
+                    self.put_data(uri.clone(), res, origin, array.clone());
                 }
 
-                // Data cutouts
-                // Get the coordinates of this cuboid out of the full volume:
-                let z_start = (cuboid_index.z * self.cuboid_size.z) + start_ind.z;
-                let z_stop = (cuboid_index.z * self.cuboid_size.z) + stop_ind.z;
-                let y_start = (cuboid_index.y * self.cuboid_size.y) + start_ind.y;
-                let y_stop = (cuboid_index.y * self.cuboid_size.y) + stop_ind.y;
-                let x_start = (cuboid_index.x * self.cuboid_size.x) + start_ind.x;
-                let x_stop = (cuboid_index.x * self.cuboid_size.x) + stop_ind.x;
+                let new_data = array.slice(s![
+                    start_ind.z as usize..stop_ind.z as usize,
+                    start_ind.y as usize..stop_ind.y as usize,
+                    start_ind.x as usize..stop_ind.x as usize
+                ]);
 
+                // Insert data cutout into large array
                 large_array
                     .slice_mut(s![
-                        z_start as isize..z_stop as isize,
-                        y_start as isize..y_stop as isize,
-                        x_start as isize..x_stop as isize,
+                        z_start as usize..z_stop as usize,
+                        y_start as usize..y_stop as usize,
+                        x_start as usize..x_stop as usize,
                     ])
-                    .assign(&array.slice_mut(s![
-                        start_ind.z as isize..stop_ind.z as isize,
-                        start_ind.y as isize..stop_ind.y as isize,
-                        start_ind.x as isize..stop_ind.x as isize
-                    ]))
+                    .assign(&new_data);
             }
 
             return large_array;
@@ -326,7 +361,7 @@ pub mod data_manager {
         fn put_data(
             &self,
             uri: String,
-            resoluton: u8,
+            res: u8,
             origin: Vector3,
             data: ndarray::Array3<u8>,
         ) -> bool {
@@ -339,25 +374,35 @@ pub mod data_manager {
                 },
                 self.cuboid_size,
             );
+            let boss_uri: Vec<&str> = uri.split("://").collect();
 
             for (cuboid_index, (start_ind, stop_ind)) in &cuboids {
-                let filename = format!("{}/{}", self.file_path, cuboid_index);
+                let filename = format!(
+                    "{}/{}/{}/{}",
+                    self.file_path, boss_uri[1], res, cuboid_index
+                );
 
                 let filepath = Path::new(&filename);
                 let mut array: Array3<u8>;
                 // Get existing data:
-                if filepath.exists() {
-                    let data = fs::read(&filename).unwrap();
+                if filepath.exists() && fs::read(&filepath).unwrap().len() > 0 {
+                    let read_data = fs::read(&filepath).unwrap();
                     array = Array::from_shape_vec(
                         (
                             self.cuboid_size.z as usize,
                             self.cuboid_size.y as usize,
                             self.cuboid_size.x as usize,
                         ),
-                        data,
+                        read_data,
                     )
                     .unwrap();
                 } else {
+                    let dir_path: Vec<&str> = filename.split("/").collect();
+                    let dir_path_str = dir_path[..dir_path.len() - 1].join("/");
+                    match fs::create_dir_all(&dir_path_str) {
+                        Ok(a) => a,
+                        _ => unreachable!(), // Failed to create file somehow...
+                    };
                     match fs::File::create(&filepath) {
                         Err(why) => panic!(
                             "couldn't create {}: {}",
@@ -373,26 +418,25 @@ pub mod data_manager {
                     ));
                 }
 
-                // Data cutouts
-                // Get the coordinates of this cuboid out of the full volume:
-                let z_start = (cuboid_index.z * self.cuboid_size.z) + start_ind.z;
-                let z_stop = (cuboid_index.z * self.cuboid_size.z) + stop_ind.z;
-                let y_start = (cuboid_index.y * self.cuboid_size.y) + start_ind.y;
-                let y_stop = (cuboid_index.y * self.cuboid_size.y) + stop_ind.y;
-                let x_start = (cuboid_index.x * self.cuboid_size.x) + start_ind.x;
-                let x_stop = (cuboid_index.x * self.cuboid_size.x) + stop_ind.x;
+                // Get the coordinates of this cuboid out of the cutout volume:
+                let z_start = ((cuboid_index.z * self.cuboid_size.z) + start_ind.z) - origin.z;
+                let z_stop = ((cuboid_index.z * self.cuboid_size.z) + stop_ind.z) - origin.z;
+                let y_start = ((cuboid_index.y * self.cuboid_size.y) + start_ind.y) - origin.y;
+                let y_stop = ((cuboid_index.y * self.cuboid_size.y) + stop_ind.y) - origin.y;
+                let x_start = ((cuboid_index.x * self.cuboid_size.x) + start_ind.x) - origin.x;
+                let x_stop = ((cuboid_index.x * self.cuboid_size.x) + stop_ind.x) - origin.x;
 
                 // Write cuboid to the array:
                 array
                     .slice_mut(s![
-                        start_ind.z as isize..stop_ind.z as isize,
-                        start_ind.y as isize..stop_ind.y as isize,
-                        start_ind.x as isize..stop_ind.x as isize
+                        start_ind.z as usize..stop_ind.z as usize,
+                        start_ind.y as usize..stop_ind.y as usize,
+                        start_ind.x as usize..stop_ind.x as usize
                     ])
                     .assign(&data.slice(s![
-                        z_start as isize..z_stop as isize,
-                        y_start as isize..y_stop as isize,
-                        x_start as isize..x_stop as isize,
+                        z_start as usize..z_stop as usize,
+                        y_start as usize..y_stop as usize,
+                        x_start as usize..x_stop as usize,
                     ]));
 
                 // Write cuboid to disk:
@@ -407,6 +451,10 @@ pub mod data_manager {
                 }
             }
             return true;
+        }
+
+        fn get_next_layer(&self) -> &dyn DataManager {
+            return self.next_layer.as_ref();
         }
     }
 
@@ -455,7 +503,7 @@ pub mod data_manager {
         fn get_data(
             &self,
             uri: String,
-            resoluton: u8,
+            res: u8,
             origin: Vector3,
             destination: Vector3,
         ) -> ndarray::Array3<u8> {
@@ -465,20 +513,27 @@ pub mod data_manager {
                 self.token.to_string(),
             );
 
-            // remote.get_cutout(boss_uri: String, res: u8, xs: Extents, ys: Extents, zs: Extents)
-
-            ndarray::Array::zeros((10, 10, 10))
+            let data = remote
+                .get_cutout(
+                    format!("bossdb://{}", uri),
+                    res,
+                    (origin.x, destination.x),
+                    (origin.y, destination.y),
+                    (origin.z, destination.z),
+                )
+                .unwrap();
+            return data;
         }
 
         /// Unimplemented. Don't do this, I think.
         fn put_data(
             &self,
-            uri: String,
-            resoluton: u8,
-            origin: Vector3,
-            data: ndarray::Array3<u8>,
+            _uri: String,
+            _resoluton: u8,
+            _origin: Vector3,
+            _data: ndarray::Array3<u8>,
         ) -> bool {
-            panic!("Failed to put data.")
+            panic!("Putting data with the BossDB relay is currently not supported.")
         }
     }
 }

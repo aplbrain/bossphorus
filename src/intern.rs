@@ -3,9 +3,6 @@ pub mod remote {
     use ndarray::{s, Array, Array3};
     use reqwest::blocking::Client;
 
-    /// Describe min- and max- pixel coordinates along a dimension.
-    type Extents<'a> = (i32, i32);
-
     pub struct BossRemote {
         /// A BossRemote analog to Python's `intern.remote.boss.BossRemote`.
         protocol: String,
