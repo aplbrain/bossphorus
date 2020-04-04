@@ -30,3 +30,27 @@ pub fn get_boss_host(rocket: Rocket) -> Result<Rocket, Rocket> {
     println!("Boss host: {}", boss_host);
     Ok(rocket.manage(BossHost(boss_host)))
 }
+
+
+/// Boss token used for auth.
+pub struct BossToken(pub String);
+
+const BOSSTOKEN_ENV_NAME: &str = "BOSSTOKEN";
+const BOSSTOKEN_ROCKET_CFG: &str = "bosstoken";
+const BOSSTOKEN_DEFAULT: &str = "public";
+
+/// Gets the Boss token for auth.  First checks for an environment
+/// variable.  Then checks for a value in the Rocket.toml file.
+pub fn get_boss_token(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let boss_token: String;
+    match var(BOSSTOKEN_ENV_NAME) {
+        Ok(val) => boss_token = val,
+        Err(e) => {
+            boss_token = rocket.config()
+                .get_str(BOSSTOKEN_ROCKET_CFG)
+                .unwrap_or(BOSSTOKEN_DEFAULT)
+                .to_string();
+        },
+    }
+    Ok(rocket.manage(BossToken(boss_token)))
+}
