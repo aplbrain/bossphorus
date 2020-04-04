@@ -151,6 +151,8 @@ fn upload(
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
+    bosshost: State<config::BossHost>,
+    bosstoken: State<config::BossToken>
 ) -> status::Created<String> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
@@ -193,8 +195,8 @@ fn upload(
         },
         Box::new(BossDBRelayDataManager::new(
             "https".to_string(),
-            "api.bossdb.io".to_string(),
-            "public".to_string(),
+            bosshost.0.to_string(),
+            bosstoken.0.to_string(),
         )),
     );
     let result = fm.put_data(
@@ -223,6 +225,7 @@ fn main() {
             routes![index, get_channel_metadata, upload, download],
         )
         .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
+        .attach(AdHoc::on_attach("Boss Token", config::get_boss_token))
         .register(catchers![not_found])
         .launch();
 }
