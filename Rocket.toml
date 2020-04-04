@@ -1,0 +1,5 @@
+[development]
+address = "localhost"
+port = 8090
+bosshost = "api.bossdb.io"
+

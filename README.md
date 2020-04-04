@@ -10,3 +10,13 @@ It is bewildering how much faster this is than the Python implementation.
 ## Feature Parity
 
 I'm planning to add a feature-parity document once it's not embarrassing.
+
+## Development
+
+Blosc must be installed manually via a package manager to build.
+
+For MacOs:
+
+```shell
+brew install c-blosc
+```
