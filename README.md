@@ -20,13 +20,13 @@ Environment variables have precedence over the `Rocket.toml` config file.
 
 ### Environment Variables
 
-`BOSSHOST`: Sets the Boss DB host
+`BOSSHOST`: Sets the Boss DB host  
 `BOSSTOKEN`: Token used for Boss auth
 
 
 ### Rocket.toml File
 
-`bosshost`: Sets the Boss DB host
+`bosshost`: Sets the Boss DB host  
 `bosstoken`: Token used for Boss auth
 
 
