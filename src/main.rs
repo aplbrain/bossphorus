@@ -5,10 +5,12 @@ extern crate rocket;
 
 mod data_manager;
 mod intern;
+mod config;
 
 use data_manager::data_manager::{
     BossDBRelayDataManager, ChunkedBloscFileDataManager, DataManager, Vector3,
 };
+use config::config::{get_boss_host, BossHost};
 use ndarray::Array;
 use rocket::data::Data;
 use rocket::http::RawStr;
@@ -19,9 +21,6 @@ use rocket_contrib::json::Json;
 use rocket::fairing::AdHoc;
 use serde_derive::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
-
-/// The Boss host to talk to.  Part of managed state.
-struct BossHost(String);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChannelMetadata {
@@ -224,13 +223,7 @@ fn main() {
             "/v1",
             routes![index, get_channel_metadata, upload, download],
         )
-        .attach(AdHoc::on_attach("Boss Host", |rocket| {
-            let boss_host = rocket.config()
-                .get_str("bosshost")
-                .unwrap_or("api.bossdb.io")
-                .to_string();
-            Ok(rocket.manage(BossHost(boss_host)))
-        }))
+        .attach(AdHoc::on_attach("Boss Host", get_boss_host))
         .register(catchers![not_found])
         .launch();
 }
