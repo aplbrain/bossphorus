@@ -7,10 +7,9 @@ mod data_manager;
 mod intern;
 mod config;
 
-use data_manager::data_manager::{
+use data_manager::{
     BossDBRelayDataManager, ChunkedBloscFileDataManager, DataManager, Vector3,
 };
-use config::config::{get_boss_host, BossHost};
 use ndarray::Array;
 use rocket::data::Data;
 use rocket::http::RawStr;
@@ -85,7 +84,7 @@ fn download(
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
-    bosshost: State<BossHost>
+    bosshost: State<config::BossHost>
 ) -> Result<Stream<Cursor<Vec<u8>>>, std::io::Error> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
@@ -223,7 +222,7 @@ fn main() {
             "/v1",
             routes![index, get_channel_metadata, upload, download],
         )
-        .attach(AdHoc::on_attach("Boss Host", get_boss_host))
+        .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
         .register(catchers![not_found])
         .launch();
 }
