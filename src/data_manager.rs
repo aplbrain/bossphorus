@@ -499,6 +499,7 @@ pub mod data_manager {
         /// * `token` - The token to use for ALL requests from this mgr
         ///
         pub fn new(protocol: String, host: String, token: String) -> BossDBRelayDataManager {
+            println!("host: {}", host);
             BossDBRelayDataManager {
                 protocol,
                 host,

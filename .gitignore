@@ -2,3 +2,4 @@
 *.blosc
 upload/
 uploads/
+*.swp

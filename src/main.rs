@@ -14,9 +14,14 @@ use rocket::data::Data;
 use rocket::http::RawStr;
 use rocket::response::{status, Stream};
 use rocket::Request;
+use rocket::State;
 use rocket_contrib::json::Json;
+use rocket::fairing::AdHoc;
 use serde_derive::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
+
+/// The Boss host to talk to.  Part of managed state.
+struct BossHost(String);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChannelMetadata {
@@ -81,6 +86,7 @@ fn download(
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
+    bosshost: State<BossHost>
 ) -> Result<Stream<Cursor<Vec<u8>>>, std::io::Error> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
@@ -111,7 +117,7 @@ fn download(
         },
         Box::new(BossDBRelayDataManager::new(
             "https".to_string(),
-            "api.bossdb.io".to_string(),
+            bosshost.0.to_string(),
             "public".to_string(),
         )),
     );
@@ -213,15 +219,18 @@ fn not_found(_req: &Request) { /* .. */
 }
 
 fn main() {
-    rocket::custom(
-        rocket::config::Config::build(rocket::config::Environment::Development)
-            .port(8090)
-            .unwrap(),
-    )
-    .mount(
-        "/v1",
-        routes![index, get_channel_metadata, upload, download],
-    )
-    .register(catchers![not_found])
-    .launch();
+    rocket::ignite()
+        .mount(
+            "/v1",
+            routes![index, get_channel_metadata, upload, download],
+        )
+        .attach(AdHoc::on_attach("Boss Host", |rocket| {
+            let boss_host = rocket.config()
+                .get_str("bosshost")
+                .unwrap_or("api.bossdb.io")
+                .to_string();
+            Ok(rocket.manage(BossHost(boss_host)))
+        }))
+        .register(catchers![not_found])
+        .launch();
 }
