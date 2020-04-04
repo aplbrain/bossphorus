@@ -3,13 +3,29 @@
 
 This is a reimplementation of the [Bossphorus](https://github.com/aplbrain/bossphorus) codebase in [Rust](https://www.rust-lang.org/).
 
+
 ## Why?
 
 It is bewildering how much faster this is than the Python implementation.
 
+
 ## Feature Parity
 
 I'm planning to add a feature-parity document once it's not embarrassing.
+
+
+## Configuration
+
+Environment variables have precedence over the `Rocket.toml` config file.
+
+### Environment Variables
+
+`BOSSHOST`: Sets the Boss DB host
+
+### Rocket.toml File
+
+`bosshost`: Sets the Boss DB host
+
 
 ## Development
 
@@ -20,3 +36,6 @@ For MacOs:
 ```shell
 brew install c-blosc
 ```
+
+Due to use of the Rocket web server crate, the nightly Rust toolchain must be
+used.
