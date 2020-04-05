@@ -7,6 +7,7 @@
 /// want to, you can use `data_manager::get_cuboids_and_indices`, which is
 /// a lot prettier than my Python implementation, if I do say so myself.
 use crate::intern;
+use crate::usage_manager;
 
 use intern::remote::BossRemote;
 use ndarray::{s, Array, Array3};
@@ -102,6 +103,7 @@ pub struct ChunkedBloscFileDataManager {
     file_path: String,
     cuboid_size: Vector3,
     next_layer: Box<dyn DataManager>,
+    track_usage: bool,
 }
 
 /// Get a mapping of cuboid indices to the cutout indices within it.
@@ -208,11 +210,12 @@ impl ChunkedBloscFileDataManager {
     ///
     /// Create a new DataManager with a file_path on disk to which cuboids
     /// will be written, and a default cuboid_size (e.g. 512*512*16).
-    pub fn new(file_path: String, cuboid_size: Vector3) -> ChunkedBloscFileDataManager {
+    pub fn new(file_path: String, cuboid_size: Vector3, track_usage: bool) -> ChunkedBloscFileDataManager {
         return ChunkedBloscFileDataManager {
             file_path,
             cuboid_size,
             next_layer: Box::new(NullDataManager {}),
+            track_usage,
         };
     }
 
@@ -220,11 +223,13 @@ impl ChunkedBloscFileDataManager {
         file_path: String,
         cuboid_size: Vector3,
         next_layer: Box<dyn DataManager>,
+        track_usage: bool,
     ) -> ChunkedBloscFileDataManager {
         return ChunkedBloscFileDataManager {
             file_path,
             cuboid_size,
             next_layer,
+            track_usage,
         };
     }
 }
@@ -268,6 +273,14 @@ impl DataManager for ChunkedBloscFileDataManager {
                 "{}/{}/{}/{}",
                 self.file_path, boss_uri[1], res, cuboid_index
             );
+
+            if self.track_usage {
+                let mutex = usage_manager::get_sender();
+                let tx = mutex.lock().unwrap();
+                if !tx.send(filename.to_string()).is_ok() {
+                    // ToDo: log some kind of error that the usage manager went down.
+                }
+            }
 
             let filepath = Path::new(&filename);
 

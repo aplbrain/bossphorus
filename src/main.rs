@@ -6,15 +6,18 @@ extern crate rocket;
 mod data_manager;
 mod intern;
 mod config;
+mod usage_manager;
 
 use data_manager::{
     BossDBRelayDataManager, ChunkedBloscFileDataManager, DataManager, Vector3,
 };
+use usage_manager::{UsageManagerType};
 use ndarray::Array;
 use rocket::data::Data;
 use rocket::http::RawStr;
 use rocket::response::{status, Stream};
 use rocket::Request;
+use rocket::Rocket;
 use rocket::State;
 use rocket_contrib::json::Json;
 use rocket::fairing::AdHoc;
@@ -84,7 +87,9 @@ fn download(
     xs: &RawStr,
     ys: &RawStr,
     zs: &RawStr,
-    bosshost: State<config::BossHost>
+    bosshost: State<config::BossHost>,
+    bosstoken: State<config::BossToken>,
+    tracking_enabled: State<TrackingUsage>,
 ) -> Result<Stream<Cursor<Vec<u8>>>, std::io::Error> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
@@ -116,8 +121,9 @@ fn download(
         Box::new(BossDBRelayDataManager::new(
             "https".to_string(),
             bosshost.0.to_string(),
-            "public".to_string(),
+            bosstoken.0.to_string(),
         )),
+        tracking_enabled.0,
     );
 
     let result = fm
@@ -152,7 +158,8 @@ fn upload(
     ys: &RawStr,
     zs: &RawStr,
     bosshost: State<config::BossHost>,
-    bosstoken: State<config::BossToken>
+    bosstoken: State<config::BossToken>,
+    tracking_enabled: State<TrackingUsage>,
 ) -> status::Created<String> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
@@ -198,6 +205,7 @@ fn upload(
             bosshost.0.to_string(),
             bosstoken.0.to_string(),
         )),
+        tracking_enabled.0,
     );
     let result = fm.put_data(
         format!("bossdb://{}/{}/{}", collection, experiment, channel),
@@ -218,6 +226,28 @@ fn index() -> String {
 fn not_found(_req: &Request) { /* .. */
 }
 
+/// Is usage tracking enabled?
+pub struct TrackingUsage(pub bool);
+
+/// Start the usage manager if it's turned on.  If manager started, the
+/// TrackingUsage state variable is set to true.
+fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let mgr = rocket.state::<config::UsageManager>();
+    let tracking: bool = match mgr {
+        None => false,
+        Some(mgr_type) => {
+            match usage_manager::get_manager_type(&mgr_type.0) {
+                UsageManagerType::None => false,
+                _ => {
+                    usage_manager::run();
+                    true
+                },
+            }
+        },
+    };
+    Ok(rocket.manage(TrackingUsage(tracking)))
+}
+
 fn main() {
     rocket::ignite()
         .mount(
@@ -226,6 +256,8 @@ fn main() {
         )
         .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
         .attach(AdHoc::on_attach("Boss Token", config::get_boss_token))
+        .attach(AdHoc::on_attach("Usage Manager Config", config::get_usage_mgr))
+        .attach(AdHoc::on_attach("Usage Manager Start", start_usage_mgr))
         .register(catchers![not_found])
         .launch();
 }
