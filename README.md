@@ -11,8 +11,7 @@ It is bewildering how much faster this is than the Python implementation.
 
 ## Feature Parity
 
-I'm planning to add a feature-parity document once it's not embarrassing.
-
+See [Feature Parity](docs/Features.md) for more information.
 
 ## Configuration
 
@@ -44,11 +43,31 @@ bosstoken = "public"
 
 Blosc must be installed manually via a package manager to build.
 
-For MacOs:
+For MacOS:
 
 ```shell
 brew install c-blosc
 ```
 
-Due to use of the Rocket web server crate, the nightly Rust toolchain must be
-used.
+For Ubuntu-like:
+
+```shell
+sudo apt install libblosc-dev
+```
+
+
+Due to use of the Rocket web server crate, the nightly Rust toolchain must be used. You can set this as your project default with:
+
+```shell
+rustup override set nightly
+```
+
+## Releases
+
+You can build an optimized release with:
+
+```shell
+cargo build --release
+```
+
+The binary will be at `target/release/bossphorus`.
