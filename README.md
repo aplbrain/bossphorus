@@ -56,10 +56,10 @@ sudo apt install libblosc-dev
 ```
 
 
-Due to use of the Rocket web server crate, the nightly Rust toolchain must be used. You can set this as your default with:
+Due to use of the Rocket web server crate, the nightly Rust toolchain must be used. You can set this as your project default with:
 
 ```shell
-rustup default nightly
+rustup override set nightly
 ```
 
 ## Releases
