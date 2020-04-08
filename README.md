@@ -61,3 +61,13 @@ Due to use of the Rocket web server crate, the nightly Rust toolchain must be us
 ```shell
 rustup default nightly
 ```
+
+## Releases
+
+You can build an optimized release with:
+
+```shell
+cargo build --release
+```
+
+The binary will be at `target/release/bossphorus`.
