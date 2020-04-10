@@ -44,14 +44,14 @@ pub trait DataManager {
     fn get_data(
         &self,
         uri: String,
-        resoluton: u8,
+        resolution: u8,
         origin: Vector3,
         destination: Vector3,
     ) -> ndarray::Array3<u8>;
     fn put_data(
         &self,
         uri: String,
-        resoluton: u8,
+        resolution: u8,
         origin: Vector3,
         data: ndarray::Array3<u8>,
     ) -> bool;
@@ -68,32 +68,25 @@ pub struct NullDataManager {}
 impl DataManager for NullDataManager {
     fn get_data(
         &self,
-        uri: String,
-        resoluton: u8,
-        origin: Vector3,
-        destination: Vector3,
+        _uri: String,
+        _resolution: u8,
+        _origin: Vector3,
+        _destination: Vector3,
     ) -> ndarray::Array3<u8> {
-        // return Array::zeros((
-        //     (destination.z - origin.z) as usize,
-        //     (destination.y - origin.y) as usize,
-        //     (destination.x - origin.x) as usize,
-        // ));
-
-        // Alternatively:
         panic!("Failed to get data.")
     }
     fn put_data(
         &self,
-        uri: String,
-        resoluton: u8,
-        origin: Vector3,
-        data: ndarray::Array3<u8>,
+        _uri: String,
+        _resolution: u8,
+        _origin: Vector3,
+        _data: ndarray::Array3<u8>,
     ) -> bool {
         panic!("Failed to put data.")
     }
 }
 
-pub struct ChunkedBloscFileDataManager {
+pub struct ChunkedFileDataManager {
     /// A DataManager. Specifically, a filesystem data manager.
     ///
     /// The closest Python analog of this is the FileSystemStorageManager
@@ -205,13 +198,17 @@ pub fn get_cuboids_and_indices(
     return cuboids;
 }
 
-impl ChunkedBloscFileDataManager {
+impl ChunkedFileDataManager {
     /// A DataManager handles data IO from disk (and eventually cache).
     ///
     /// Create a new DataManager with a file_path on disk to which cuboids
     /// will be written, and a default cuboid_size (e.g. 512*512*16).
-    pub fn new(file_path: String, cuboid_size: Vector3, track_usage: bool) -> ChunkedBloscFileDataManager {
-        return ChunkedBloscFileDataManager {
+    pub fn new(
+        file_path: String,
+        cuboid_size: Vector3,
+        track_usage: bool,
+    ) -> ChunkedFileDataManager {
+        return ChunkedFileDataManager {
             file_path,
             cuboid_size,
             next_layer: Box::new(NullDataManager {}),
@@ -224,8 +221,8 @@ impl ChunkedBloscFileDataManager {
         cuboid_size: Vector3,
         next_layer: Box<dyn DataManager>,
         track_usage: bool,
-    ) -> ChunkedBloscFileDataManager {
-        return ChunkedBloscFileDataManager {
+    ) -> ChunkedFileDataManager {
+        return ChunkedFileDataManager {
             file_path,
             cuboid_size,
             next_layer,
@@ -234,7 +231,7 @@ impl ChunkedBloscFileDataManager {
     }
 }
 
-impl DataManager for ChunkedBloscFileDataManager {
+impl DataManager for ChunkedFileDataManager {
     /// TODO: `has_data`
     // fn has_data(&self) -> bool {
     //     return true;
@@ -379,13 +376,7 @@ impl DataManager for ChunkedBloscFileDataManager {
     ///
     /// * Boolean of success
     ///
-    fn put_data(
-        &self,
-        uri: String,
-        res: u8,
-        origin: Vector3,
-        data: ndarray::Array3<u8>,
-    ) -> bool {
+    fn put_data(&self, uri: String, res: u8, origin: Vector3, data: ndarray::Array3<u8>) -> bool {
         let cuboids = get_cuboids_and_indices(
             origin,
             Vector3 {
@@ -550,7 +541,7 @@ impl DataManager for BossDBRelayDataManager {
     fn put_data(
         &self,
         _uri: String,
-        _resoluton: u8,
+        _resolution: u8,
         _origin: Vector3,
         _data: ndarray::Array3<u8>,
     ) -> bool {

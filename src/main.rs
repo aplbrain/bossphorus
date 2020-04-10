@@ -3,26 +3,24 @@
 #[macro_use]
 extern crate rocket;
 
+mod config;
 mod data_manager;
 mod intern;
-mod config;
 mod usage_manager;
 
-use data_manager::{
-    BossDBRelayDataManager, ChunkedBloscFileDataManager, DataManager, Vector3,
-};
-use usage_manager::{UsageManagerType};
+use data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
 use ndarray::Array;
 use rocket::data::Data;
+use rocket::fairing::AdHoc;
 use rocket::http::RawStr;
 use rocket::response::{status, Stream};
 use rocket::Request;
 use rocket::Rocket;
 use rocket::State;
 use rocket_contrib::json::Json;
-use rocket::fairing::AdHoc;
 use serde_derive::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
+use usage_manager::UsageManagerType;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChannelMetadata {
@@ -111,7 +109,7 @@ fn download(
     // TODO: Assert that shape is positive
 
     // Perform the data-read:
-    let fm = ChunkedBloscFileDataManager::new_with_layer(
+    let fm = ChunkedFileDataManager::new_with_layer(
         "uploads".to_string(),
         Vector3 {
             x: 512,
@@ -193,7 +191,7 @@ fn upload(
     let array = Array::from_shape_vec(shape_dimension, decompressed).unwrap();
 
     // Perform the data-write:
-    let fm = ChunkedBloscFileDataManager::new_with_layer(
+    let fm = ChunkedFileDataManager::new_with_layer(
         "uploads".to_string(),
         Vector3 {
             x: 512,
@@ -235,13 +233,11 @@ fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
     let mgr = rocket.state::<config::UsageManager>();
     let tracking: bool = match mgr {
         None => false,
-        Some(mgr_type) => {
-            match usage_manager::get_manager_type(&mgr_type.0) {
-                UsageManagerType::None => false,
-                _ => {
-                    usage_manager::run();
-                    true
-                },
+        Some(mgr_type) => match usage_manager::get_manager_type(&mgr_type.0) {
+            UsageManagerType::None => false,
+            _ => {
+                usage_manager::run();
+                true
             }
         },
     };
@@ -256,7 +252,10 @@ fn main() {
         )
         .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
         .attach(AdHoc::on_attach("Boss Token", config::get_boss_token))
-        .attach(AdHoc::on_attach("Usage Manager Config", config::get_usage_mgr))
+        .attach(AdHoc::on_attach(
+            "Usage Manager Config",
+            config::get_usage_mgr,
+        ))
         .attach(AdHoc::on_attach("Usage Manager Start", start_usage_mgr))
         .register(catchers![not_found])
         .launch();
