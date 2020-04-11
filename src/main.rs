@@ -238,7 +238,7 @@ fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
                 usage_manager::run(kind);
                 true
             }
-        },
+        }
     };
     Ok(rocket.manage(TrackingUsage(tracking)))
 }

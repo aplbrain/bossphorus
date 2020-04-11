@@ -1,6 +1,6 @@
 pub mod remote {
     /// This module is intended to begin to mirror the intern Python library.
-    use ndarray::{s, Array, Array3};
+    use ndarray::{Array, Array3};
     use reqwest::blocking::Client;
 
     pub struct BossRemote {
