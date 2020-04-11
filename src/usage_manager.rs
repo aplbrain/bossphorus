@@ -31,6 +31,13 @@ pub fn get_manager_type(name: &str) -> UsageManagerType {
     }
 }
 
+fn usage_manager_factory(kind: UsageManagerType) -> Box<dyn UsageManager> {
+    match kind {
+        UsageManagerType::None => Box::new(NoneManager {}),
+        UsageManagerType::Console => Box::new(ConsoleUsageManager {}),
+    }
+}
+
 /// Provide shareable access to the sender for the thread responsible for
 /// tracking cuboid usage.  This is kind of a kludge, but it doesn't look
 /// like Rocket provides easy access to the worker threads.
@@ -48,7 +55,11 @@ pub fn get_sender() -> &'static sync::Mutex<mpsc::Sender<String>> {
 }
 
 /// Start the usage manager.  This should only be called ONCE.
-pub fn run() {
+pub fn run(kind: UsageManagerType) {
+    if let UsageManagerType::None = kind {
+        return
+    }
+
     let (tx, rx) = mpsc::channel::<String>();
     unsafe {
         if SENDER_MUTEX.is_some() {
@@ -57,9 +68,8 @@ pub fn run() {
         SENDER_MUTEX = Option::Some(sync::Mutex::new(tx));
     }
 
-    // ToDo: make manager configurable.
     thread::spawn(move || {
-        let usage_mgr = ConsoleUsageManager {};
+        let usage_mgr = usage_manager_factory(kind);
         for key in rx {
             usage_mgr.log_request(key);
         }
@@ -70,6 +80,13 @@ pub trait UsageManager {
 
     /// Log request to console, file, or DB.
     fn log_request(&self, key: String);
+}
+
+/// Empty manager.
+pub struct NoneManager {}
+
+impl UsageManager for NoneManager {
+    fn log_request(&self, _key: String) {}
 }
 
 /// Proof of concept manager.
