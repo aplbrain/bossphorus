@@ -44,6 +44,11 @@ struct ChannelMetadata {
 /// # Arguments:
 ///
 /// * `string_value` - A string that contains two integers separated by a colon
+///
+/// # Returns:
+///
+/// * Vec<u64>[2]
+///
 fn colon_delim_str_to_extents(string_value: &RawStr) -> Vec<u64> {
     string_value
         .split(":")
@@ -51,6 +56,10 @@ fn colon_delim_str_to_extents(string_value: &RawStr) -> Vec<u64> {
         .collect()
 }
 
+/// Get the metadata dictionary for a channel.
+///
+/// This endpoint returns the JSONified `ChannelMetadata` for a channel.
+///
 #[get("/collection/<collection>/experiment/<experiment>/channel/<channel>")]
 fn get_channel_metadata(
     collection: &RawStr,
@@ -73,6 +82,18 @@ fn get_channel_metadata(
     })
 }
 
+/// Download a 3D cutout of data.
+///
+/// This endpoint can either return data in blosc-compressed format (default)
+/// or in JPG filmstrip format. In order to get a JPG filmstrip response, you
+/// must pass a `Content-Type` header with a value of `image/jpeg`. For
+/// more information on this, check out the BossDB documentaton
+/// (https://docs.theboss.io/docs/cutout-get#section-getting-data-volumes).
+///
+/// ## JPEG Filmstrip
+/// This option returns a single JPEG encoded image, where each slice in the
+/// z-dimension is concatenated in the y-dimension. This only works for `uint8`
+/// data channels.
 #[get("/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>")]
 fn download(
     collection: &RawStr,
@@ -85,7 +106,7 @@ fn download(
     bosshost: State<config::BossHost>,
     bosstoken: State<config::BossToken>,
     tracking_enabled: State<TrackingUsage>,
-) -> Result<Stream<Cursor<Vec<u8>>>, std::io::Error> {
+) -> Result<Stream<Cursor<Vec<u8>>>, String> {
     // Parse out the extents:
     let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
     let y_extents: Vec<u64> = colon_delim_str_to_extents(ys);
@@ -103,7 +124,10 @@ fn download(
         z: z_extents[1],
     };
 
-    // TODO: Assert that shape is positive
+    // TODO: Confirm that shape is positive
+    // if origin.x >= destination.x || origin.y >= destination.y || origin.z >= destination.z {
+    //     // Error
+    // }
 
     // Perform the data-read:
     let fm = ChunkedFileDataManager::new_with_layer(
