@@ -233,10 +233,12 @@ fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
     let mgr = rocket.state::<config::UsageManager>();
     let tracking: bool = match mgr {
         None => false,
-        Some(mgr_type) => match usage_manager::get_manager_type(&mgr_type.0) {
-            UsageManagerType::None => false,
-            _ => {
-                usage_manager::run();
+        Some(mgr_type) => {
+            let kind = usage_manager::get_manager_type(&mgr_type.0);
+            if let UsageManagerType::None = kind {
+                false
+            } else {
+                usage_manager::run(kind);
                 true
             }
         },
