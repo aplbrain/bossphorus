@@ -2,7 +2,7 @@
 
 <!-- emoji for your copypasting convenience: ✅🔴🔜 -->
 
-| Feature \\ Data Manager | `ChunkedBloscFileDataManager` | `BossDBRelayDataManager` |
+| Feature \\ Data Manager | `ChunkedFileDataManager` | `BossDBRelayDataManager` |
 |-------------------------|-------------------------------|--------------------------|
 | `get_data` | ✅ | ✅ |
 | `put_data` | ✅ | 🔴¹ |
