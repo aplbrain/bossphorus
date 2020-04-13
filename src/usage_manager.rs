@@ -4,6 +4,13 @@
 ///
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
+
+extern crate diesel;
+use super::config;
+use crate::db;
+use db::models::{CacheRoot, NewCacheRoot, NewCuboid};
+use diesel::prelude::*;
+use std::env;
 use std::sync;
 use std::sync::mpsc;
 use std::thread;
@@ -11,10 +18,14 @@ use std::thread;
 /// User string names for usage managers.
 const NONE_MANAGER: &str = "none";
 const CONSOLE_MANAGER: &str = "console";
+const DB_MANAGER: &str = "db";
+
+const DB_URL_ENV_NAME: &str = "BOSSPHORUST_DB_URL";
 
 pub enum UsageManagerType {
     None,
     Console,
+    MySql,
 }
 
 /// Map string name of usage manager to enum.  If no match is found, return
@@ -24,6 +35,7 @@ pub fn get_manager_type(name: &str) -> UsageManagerType {
     match lowered.as_str() {
         CONSOLE_MANAGER => UsageManagerType::Console,
         NONE_MANAGER => UsageManagerType::None,
+        DB_MANAGER => UsageManagerType::MySql,
         _ => {
             println!("Warning, got unknown user manager: {}", name);
             UsageManagerType::None
@@ -35,6 +47,7 @@ fn usage_manager_factory(kind: UsageManagerType) -> Box<dyn UsageManager> {
     match kind {
         UsageManagerType::None => Box::new(NoneManager {}),
         UsageManagerType::Console => Box::new(ConsoleUsageManager {}),
+        UsageManagerType::MySql => Box::new(MySqlUsageManager::new()),
     }
 }
 
@@ -100,5 +113,67 @@ impl UsageManager for ConsoleUsageManager {
     }
 }
 
-// ToDo: create DB manager that tracks keys along with number of accesses,
-// timestamp of first acces, timestamp of last access.
+pub struct MySqlUsageManager {
+    connection: MysqlConnection,
+    cache_root_id: i32,
+}
+
+impl UsageManager for MySqlUsageManager {
+    fn log_request(&self, key: String) {
+        use db::schema::cuboids::dsl::*;
+        match diesel::update(cuboids.filter(cube_key.eq(&key)))
+            .set(requests.eq(requests + 1))
+            .execute(&self.connection)
+        {
+            Err(err) => println!("Error updating DB: {}", err),
+            Ok(num_rows) => {
+                if num_rows < 1 {
+                    println!("Inserting {}", key);
+                    let new_request = NewCuboid { cache_root: self.cache_root_id, cube_key: key, requests: 1 };
+                    if diesel::insert_into(cuboids)
+                        .values(&new_request)
+                        .execute(&self.connection)
+                        .is_err()
+                    {
+                        // ToDo: handle error
+                        println!("insert failed");
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl MySqlUsageManager {
+    pub fn new() -> MySqlUsageManager {
+        let db_url = env::var(DB_URL_ENV_NAME)
+            .expect(&format!("{} environment variable must be set", &DB_URL_ENV_NAME));
+        MySqlUsageManager::connect_to(&db_url)
+    }
+
+    pub fn connect_to(db_url: &str) -> MySqlUsageManager {
+        let connection = MysqlConnection::establish(db_url)
+            .expect(&format!("Error connecting to {}", db_url));
+        let cache_root_id = MySqlUsageManager::get_cache_root_id(&connection);
+        return MySqlUsageManager { connection, cache_root_id };
+    }
+
+    fn get_cache_root_id(connection: &MysqlConnection) -> i32 {
+        use db::schema::cache_roots::dsl::*;
+        let row: std::result::Result<CacheRoot, diesel::result::Error> = cache_roots
+            .filter(path.eq(config::get_cuboid_root_abs_path()))
+            .limit(1)                   // Should be unique, but . . .
+            .get_result(connection);
+        match row {
+            Ok(row) => row.id,
+            Err(_) => {
+                let row = NewCacheRoot { path: config::get_cuboid_root_abs_path() };
+                diesel::insert_into(cache_roots)
+                    .values(row)
+                    .execute(connection)
+                    .expect("Could not update MySQL database");
+                MySqlUsageManager::get_cache_root_id(connection)
+            },
+        }
+    }
+}
