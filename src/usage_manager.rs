@@ -4,12 +4,11 @@
 ///
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
-
 extern crate chrono;
 extern crate diesel;
 use super::config;
-use chrono::offset::Utc;
 use crate::db;
+use chrono::offset::Utc;
 use db::models::{CacheRoot, NewCacheRoot, NewCuboid};
 use diesel::prelude::*;
 use std::env;
@@ -49,7 +48,13 @@ fn usage_manager_factory(kind: UsageManagerType) -> Box<dyn UsageManager> {
     match kind {
         UsageManagerType::None => Box::new(NoneManager {}),
         UsageManagerType::Console => Box::new(ConsoleUsageManager {}),
-        UsageManagerType::Sqlite => Box::new(SqliteUsageManager::new()),
+        UsageManagerType::Sqlite => {
+            let db_url = env::var(DB_URL_ENV_NAME).expect(&format!(
+                "{} environment variable must be set",
+                &DB_URL_ENV_NAME
+            ));
+            Box::new(SqliteUsageManager::new(&db_url))
+        }
     }
 }
 
@@ -77,7 +82,7 @@ pub fn get_sender() -> &'static sync::Mutex<mpsc::Sender<String>> {
 /// * `cuboid_root_path` - Root of cached cuboids
 pub fn run(kind: UsageManagerType) {
     if let UsageManagerType::None = kind {
-        return
+        return;
     }
 
     let (tx, rx) = mpsc::channel::<String>();
@@ -97,7 +102,6 @@ pub fn run(kind: UsageManagerType) {
 }
 
 pub trait UsageManager {
-
     /// Log request to console, file, or DB.
     fn log_request(&self, key: String);
 }
@@ -168,24 +172,35 @@ impl UsageManager for SqliteUsageManager {
 
 impl SqliteUsageManager {
     /// Constructor.
-    pub fn new() -> SqliteUsageManager {
-        let db_url = env::var(DB_URL_ENV_NAME)
-            .expect(&format!("{} environment variable must be set", &DB_URL_ENV_NAME));
-        SqliteUsageManager::connect_to(&db_url)
-    }
-
-    /// Constructor that also opens the DB connection.
     ///
     /// # Arguments:
     ///
     /// * `db_url` - Connection string for the Sqlite DB
-    pub fn connect_to(db_url: &str) -> SqliteUsageManager {
-        let connection = SqliteConnection::establish(db_url)
-            .expect(&format!("Error connecting to {}", db_url));
+    pub fn new(db_url: &str) -> SqliteUsageManager {
+        let connection =
+            SqliteConnection::establish(db_url).expect(&format!("Error connecting to {}", db_url));
+        SqliteUsageManager::init(connection)
+    }
+
+    /// Completes setup of the manager.  Called directly by the `new()` constructor.
+    ///
+    /// # Arguments:
+    ///
+    /// * `connection` - Open Sqlite connection
+    pub fn init(connection: SqliteConnection) -> SqliteUsageManager {
         let cache_root_id = SqliteUsageManager::get_cache_root_id(&connection);
         let path_len = config::CUBOID_ROOT_PATH.len();
 
-        return SqliteUsageManager { connection, cache_root_id, path_len };
+        return SqliteUsageManager {
+            connection,
+            cache_root_id,
+            path_len,
+        };
+    }
+
+    /// Get the DB connection used by the manager (mainly for testing).
+    pub fn get_connection(&self) -> &SqliteConnection {
+        &self.connection
     }
 
     /// Looks up the id of the cache root
@@ -197,18 +212,20 @@ impl SqliteUsageManager {
         use db::schema::cache_roots::dsl::*;
         let row: std::result::Result<CacheRoot, diesel::result::Error> = cache_roots
             .filter(path.eq(config::get_cuboid_root_abs_path()))
-            .limit(1)                   // Should be unique, but . . .
+            .limit(1) // Should be unique, but . . .
             .get_result(connection);
         match row {
             Ok(row) => row.id,
             Err(_) => {
-                let row = NewCacheRoot { path: config::get_cuboid_root_abs_path() };
+                let row = NewCacheRoot {
+                    path: config::get_cuboid_root_abs_path(),
+                };
                 diesel::insert_into(cache_roots)
                     .values(row)
                     .execute(connection)
                     .expect("Could not update database");
                 SqliteUsageManager::get_cache_root_id(connection)
-            },
+            }
         }
     }
 }
