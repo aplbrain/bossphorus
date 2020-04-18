@@ -17,12 +17,12 @@ use std::sync;
 use std::sync::mpsc;
 use std::thread;
 
-/// User string names for usage managers.
+/// User string names for selecting usage managers.
 const NONE_MANAGER: &str = "none";
 const CONSOLE_MANAGER: &str = "console";
 const DB_MANAGER: &str = "db";
 
-const DB_URL_ENV_NAME: &str = "BOSSPHORUST_DB_URL";
+const DB_URL_ENV_NAME: &str = "BOSSPHORUS_DB_URL";
 
 pub enum UsageManagerType {
     None,
