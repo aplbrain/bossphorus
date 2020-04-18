@@ -17,11 +17,10 @@ pub struct NewCacheRoot {
 
 #[derive(Identifiable, Queryable)]
 pub struct Cuboid {
-    pub id: u32,
-    pub cache_root: u32,
+    pub id: i64,
+    pub cache_root: i64,
     pub cube_key: String,
-    // Diesel doesn't support u32 for add expressions, currently.
-    pub requests: i32,
+    pub requests: i64,
     pub created: DateTime<Utc>,
     pub last_accessed: DateTime<Utc>,
 }
@@ -31,6 +30,5 @@ pub struct Cuboid {
 pub struct NewCuboid {
     pub cache_root: i32,
     pub cube_key: String,
-    // Diesel doesn't support u32 for add expressions, currently.
-    pub requests: i32,
+    pub requests: i64,
 }

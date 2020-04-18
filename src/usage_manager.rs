@@ -25,7 +25,7 @@ const DB_URL_ENV_NAME: &str = "BOSSPHORUST_DB_URL";
 pub enum UsageManagerType {
     None,
     Console,
-    MySql,
+    Sqlite,
 }
 
 /// Map string name of usage manager to enum.  If no match is found, return
@@ -35,7 +35,7 @@ pub fn get_manager_type(name: &str) -> UsageManagerType {
     match lowered.as_str() {
         CONSOLE_MANAGER => UsageManagerType::Console,
         NONE_MANAGER => UsageManagerType::None,
-        DB_MANAGER => UsageManagerType::MySql,
+        DB_MANAGER => UsageManagerType::Sqlite,
         _ => {
             println!("Warning, got unknown user manager: {}", name);
             UsageManagerType::None
@@ -47,7 +47,7 @@ fn usage_manager_factory(kind: UsageManagerType) -> Box<dyn UsageManager> {
     match kind {
         UsageManagerType::None => Box::new(NoneManager {}),
         UsageManagerType::Console => Box::new(ConsoleUsageManager {}),
-        UsageManagerType::MySql => Box::new(MySqlUsageManager::new()),
+        UsageManagerType::Sqlite => Box::new(SqliteUsageManager::new()),
     }
 }
 
@@ -113,12 +113,12 @@ impl UsageManager for ConsoleUsageManager {
     }
 }
 
-pub struct MySqlUsageManager {
-    connection: MysqlConnection,
+pub struct SqliteUsageManager {
+    connection: SqliteConnection,
     cache_root_id: i32,
 }
 
-impl UsageManager for MySqlUsageManager {
+impl UsageManager for SqliteUsageManager {
     fn log_request(&self, key: String) {
         use db::schema::cuboids::dsl::*;
         match diesel::update(cuboids.filter(cube_key.eq(&key)))
@@ -144,21 +144,21 @@ impl UsageManager for MySqlUsageManager {
     }
 }
 
-impl MySqlUsageManager {
-    pub fn new() -> MySqlUsageManager {
+impl SqliteUsageManager {
+    pub fn new() -> SqliteUsageManager {
         let db_url = env::var(DB_URL_ENV_NAME)
             .expect(&format!("{} environment variable must be set", &DB_URL_ENV_NAME));
-        MySqlUsageManager::connect_to(&db_url)
+        SqliteUsageManager::connect_to(&db_url)
     }
 
-    pub fn connect_to(db_url: &str) -> MySqlUsageManager {
-        let connection = MysqlConnection::establish(db_url)
+    pub fn connect_to(db_url: &str) -> SqliteUsageManager {
+        let connection = SqliteConnection::establish(db_url)
             .expect(&format!("Error connecting to {}", db_url));
-        let cache_root_id = MySqlUsageManager::get_cache_root_id(&connection);
-        return MySqlUsageManager { connection, cache_root_id };
+        let cache_root_id = SqliteUsageManager::get_cache_root_id(&connection);
+        return SqliteUsageManager { connection, cache_root_id };
     }
 
-    fn get_cache_root_id(connection: &MysqlConnection) -> i32 {
+    fn get_cache_root_id(connection: &SqliteConnection) -> i32 {
         use db::schema::cache_roots::dsl::*;
         let row: std::result::Result<CacheRoot, diesel::result::Error> = cache_roots
             .filter(path.eq(config::get_cuboid_root_abs_path()))
@@ -171,8 +171,8 @@ impl MySqlUsageManager {
                 diesel::insert_into(cache_roots)
                     .values(row)
                     .execute(connection)
-                    .expect("Could not update MySQL database");
-                MySqlUsageManager::get_cache_root_id(connection)
+                    .expect("Could not update database");
+                SqliteUsageManager::get_cache_root_id(connection)
             },
         }
     }

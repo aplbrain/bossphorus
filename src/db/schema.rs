@@ -1,7 +1,7 @@
 table! {
     cache_roots (id) {
         id -> Integer,
-        path -> Varchar,
+        path -> Text,
     }
 }
 
@@ -9,10 +9,10 @@ table! {
     cuboids (id) {
         id -> Integer,
         cache_root -> Integer,
-        cube_key -> Varchar,
-        requests -> Integer,
-        created -> Timestamp,
-        last_accessed -> Timestamp,
+        cube_key -> Text,
+        requests -> BigInt,
+        created -> Nullable<Text>,
+        last_accessed -> Nullable<Text>,
     }
 }
 
