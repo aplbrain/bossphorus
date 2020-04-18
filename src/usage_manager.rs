@@ -5,8 +5,10 @@
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
 
+extern crate chrono;
 extern crate diesel;
 use super::config;
+use chrono::offset::Utc;
 use crate::db;
 use db::models::{CacheRoot, NewCacheRoot, NewCuboid};
 use diesel::prelude::*;
@@ -68,6 +70,11 @@ pub fn get_sender() -> &'static sync::Mutex<mpsc::Sender<String>> {
 }
 
 /// Start the usage manager.  This should only be called ONCE.
+///
+/// # Arguments:
+///
+/// * `kind` - Which usage manager to start
+/// * `cuboid_root_path` - Root of cached cuboids
 pub fn run(kind: UsageManagerType) {
     if let UsageManagerType::None = kind {
         return
@@ -114,30 +121,45 @@ impl UsageManager for ConsoleUsageManager {
 }
 
 pub struct SqliteUsageManager {
+    /// The connection to the DB.
     connection: SqliteConnection,
+    /// id of the cache root in the `cache_roots` table.  Need for inserts into
+    /// `cuboids` table.
     cache_root_id: i32,
+    /// The byte length of the CUBOID_ROOT_PATH.
+    path_len: usize,
 }
 
 impl UsageManager for SqliteUsageManager {
     fn log_request(&self, key: String) {
         use db::schema::cuboids::dsl::*;
-        match diesel::update(cuboids.filter(cube_key.eq(&key)))
-            .set(requests.eq(requests + 1))
+
+        // Strip off the root folder because the root, itself, is stored in
+        // the `cache_roots` table.
+        let (_root, remainder) = &key.split_at(self.path_len);
+
+        match diesel::update(cuboids.filter(cube_key.eq(remainder)))
+            .set((
+                requests.eq(requests + 1),
+                last_accessed.eq(Utc::now().naive_utc().to_string()),
+            ))
             .execute(&self.connection)
         {
             Err(err) => println!("Error updating DB: {}", err),
             Ok(num_rows) => {
                 if num_rows < 1 {
-                    println!("Inserting {}", key);
-                    let new_request = NewCuboid { cache_root: self.cache_root_id, cube_key: key, requests: 1 };
-                    if diesel::insert_into(cuboids)
+                    let new_request = NewCuboid {
+                        cache_root: self.cache_root_id,
+                        cube_key: remainder.to_string(),
+                        requests: 1,
+                    };
+                    diesel::insert_into(cuboids)
                         .values(&new_request)
                         .execute(&self.connection)
-                        .is_err()
-                    {
-                        // ToDo: handle error
-                        println!("insert failed");
-                    }
+                        .unwrap_or_else(|err| {
+                            println!("insert failed: {}", err);
+                            0
+                        });
                 }
             }
         }
@@ -145,19 +167,32 @@ impl UsageManager for SqliteUsageManager {
 }
 
 impl SqliteUsageManager {
+    /// Constructor.
     pub fn new() -> SqliteUsageManager {
         let db_url = env::var(DB_URL_ENV_NAME)
             .expect(&format!("{} environment variable must be set", &DB_URL_ENV_NAME));
         SqliteUsageManager::connect_to(&db_url)
     }
 
+    /// Constructor that also opens the DB connection.
+    ///
+    /// # Arguments:
+    ///
+    /// * `db_url` - Connection string for the Sqlite DB
     pub fn connect_to(db_url: &str) -> SqliteUsageManager {
         let connection = SqliteConnection::establish(db_url)
             .expect(&format!("Error connecting to {}", db_url));
         let cache_root_id = SqliteUsageManager::get_cache_root_id(&connection);
-        return SqliteUsageManager { connection, cache_root_id };
+        let path_len = config::CUBOID_ROOT_PATH.len();
+
+        return SqliteUsageManager { connection, cache_root_id, path_len };
     }
 
+    /// Looks up the id of the cache root
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - Open connection to the DB
     fn get_cache_root_id(connection: &SqliteConnection) -> i32 {
         use db::schema::cache_roots::dsl::*;
         let row: std::result::Result<CacheRoot, diesel::result::Error> = cache_roots

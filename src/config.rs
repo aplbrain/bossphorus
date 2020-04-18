@@ -13,6 +13,7 @@ use std::fs;
 /// Thus, keeping this as a simple constant for now.
 pub const CUBOID_ROOT_PATH: &str = "uploads";
 
+/// Get the absolute path of the cuboid root folder.
 pub fn get_cuboid_root_abs_path() -> String {
     let path = fs::canonicalize(CUBOID_ROOT_PATH);
     let path_str = match path {

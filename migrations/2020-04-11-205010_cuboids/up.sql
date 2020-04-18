@@ -16,6 +16,6 @@ CREATE TABLE cuboids (
         ON UPDATE CASCADE
 );
 
-CREATE UNIQUE INDEX cuboids_cache_root_index ON cuboids(cache_root);
+CREATE INDEX cuboids_cache_root_index ON cuboids(cache_root);
 
 CREATE UNIQUE INDEX cuboids_key_cache_root_index on cuboids (cube_key, cache_root);

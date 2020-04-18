@@ -7,7 +7,7 @@ table! {
 
 table! {
     cuboids (id) {
-        id -> Integer,
+        id -> BigInt,
         cache_root -> Integer,
         cube_key -> Text,
         requests -> BigInt,
