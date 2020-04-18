@@ -1,0 +1,19 @@
+diff --git a/src/db/schema.rs b/src/db/schema.rs
+index 3f967d4..d1ae610 100644
+--- a/src/db/schema.rs
++++ b/src/db/schema.rs
+@@ -4,13 +4,13 @@ table! {
+         path -> Text,
+     }
+ }
+ 
+ table! {
+     cuboids (id) {
+-        id -> Integer,
++        id -> BigInt,
+         cache_root -> Integer,
+         cube_key -> Text,
+         requests -> BigInt,
+         created -> Nullable<Text>,
+         last_accessed -> Nullable<Text>,
+     }

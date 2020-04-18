@@ -4,7 +4,31 @@
 /// Rocket.toml config file.  Values set as environment variables will
 /// override like values in the config file.
 use rocket::Rocket;
-use std::env::{var};
+use std::env;
+use std::fs;
+
+/// Store cuboid files off of this folder.  This is not a standard config
+/// variable because we will likely move to a separate config file as
+/// discussed in https://github.com/aplbrain/bossphorust/issues/11
+/// Thus, keeping this as a simple constant for now.
+pub const CUBOID_ROOT_PATH: &str = "uploads";
+
+/// Get the absolute path of the cuboid root folder.
+pub fn get_cuboid_root_abs_path() -> String {
+    let path = fs::canonicalize(CUBOID_ROOT_PATH);
+    let path_str = match path {
+        Ok(p) => p,
+        Err(_) => {
+            fs::create_dir_all(CUBOID_ROOT_PATH)
+                .expect(&format!("Couldn't create {}", CUBOID_ROOT_PATH));
+            return get_cuboid_root_abs_path()
+        },
+    };
+    return match path_str.as_path().to_str() {
+        Some(s) => s.to_string(),
+        None => panic!("Non-unicode path given"),
+    }
+}
 
 /// The Boss host to talk to.
 pub struct BossHost(pub String);
@@ -17,7 +41,7 @@ const BOSSHOST_DEFAULT: &str = "api.bossdb.io";
 /// variable.  Then checks for a value in the Rocket.toml file.
 pub fn get_boss_host(rocket: Rocket) -> Result<Rocket, Rocket> {
     let boss_host: String;
-    match var(BOSSHOST_ENV_NAME) {
+    match env::var(BOSSHOST_ENV_NAME) {
         Ok(val) => boss_host = val,
         Err(_) => {
             boss_host = rocket.config()
@@ -43,7 +67,7 @@ const BOSSTOKEN_DEFAULT: &str = "public";
 /// variable.  Then checks for a value in the Rocket.toml file.
 pub fn get_boss_token(rocket: Rocket) -> Result<Rocket, Rocket> {
     let boss_token: String;
-    match var(BOSSTOKEN_ENV_NAME) {
+    match env::var(BOSSTOKEN_ENV_NAME) {
         Ok(val) => boss_token = val,
         Err(_) => {
             boss_token = rocket.config()
@@ -66,7 +90,7 @@ const USAGE_MGR_DEFAULT: &str = "none";
 /// variable.  Then checks for a value in the Rocket.toml file.
 pub fn get_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
     let usage_mgr: String;
-    match var(USAGE_MGR_ENV_NAME) {
+    match env::var(USAGE_MGR_ENV_NAME) {
         Ok(val) => usage_mgr = val,
         Err(_) => {
             usage_mgr = rocket.config()

@@ -1,9 +1,13 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
+extern crate diesel;
+
+#[macro_use]
 extern crate rocket;
 
 mod config;
+mod db;
 mod data_manager;
 mod intern;
 mod usage_manager;
@@ -110,7 +114,7 @@ fn download(
 
     // Perform the data-read:
     let fm = ChunkedFileDataManager::new_with_layer(
-        "uploads".to_string(),
+        config::CUBOID_ROOT_PATH.to_string(),
         Vector3 {
             x: 512,
             y: 512,
@@ -192,7 +196,7 @@ fn upload(
 
     // Perform the data-write:
     let fm = ChunkedFileDataManager::new_with_layer(
-        "uploads".to_string(),
+        config::CUBOID_ROOT_PATH.to_string(),
         Vector3 {
             x: 512,
             y: 512,

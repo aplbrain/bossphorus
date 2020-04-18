@@ -3,3 +3,4 @@
 upload/
 uploads/
 *.swp
+*.sqlite

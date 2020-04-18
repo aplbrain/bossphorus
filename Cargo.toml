@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 blosc = "0.1.2"
+diesel = { version = "1.4.4", features = ["chrono", "sqlite"] }
+chrono = "0.4.11"
 ndarray = "0.13.0"
 reqwest = { version = "0.10.4", features = ["blocking"] }
 rocket = "0.4.4"
