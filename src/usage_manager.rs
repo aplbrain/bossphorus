@@ -212,7 +212,6 @@ impl SqliteUsageManager {
         use db::schema::cache_roots::dsl::*;
         let row: std::result::Result<CacheRoot, diesel::result::Error> = cache_roots
             .filter(path.eq(config::get_cuboid_root_abs_path()))
-            .limit(1) // Should be unique, but . . .
             .get_result(connection);
         match row {
             Ok(row) => row.id,
