@@ -1,21 +1,12 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
-extern crate diesel;
-
-#[macro_use]
-extern crate diesel_migrations;
-
-#[macro_use]
 extern crate rocket;
 
-mod config;
-mod db;
-mod data_manager;
-mod intern;
-mod usage_manager;
 
-use data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
+use bossphorus::usage_manager::{self, UsageManagerType};
+use bossphorus::config;
+use bossphorus::data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
 use ndarray::Array;
 use rocket::data::Data;
 use rocket::fairing::AdHoc;
@@ -27,7 +18,6 @@ use rocket::State;
 use rocket_contrib::json::Json;
 use serde_derive::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
-use usage_manager::UsageManagerType;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ChannelMetadata {
