@@ -11,8 +11,8 @@ table! {
         cache_root -> Integer,
         cube_key -> Text,
         requests -> BigInt,
-        created -> Nullable<Text>,
-        last_accessed -> Nullable<Text>,
+        created -> Timestamp,
+        last_accessed -> Timestamp,
     }
 }
 

@@ -7,8 +7,8 @@
 extern crate chrono;
 extern crate diesel;
 use super::config;
-use crate::db;
-use chrono::offset::Utc;
+use super::db::{self, models};
+use chrono::prelude::*;
 use db::models::{CacheRoot, NewCacheRoot, NewCuboid};
 use diesel::prelude::*;
 use std::env;
@@ -106,6 +106,15 @@ pub trait UsageManager {
     fn log_request(&self, key: String);
 }
 
+pub trait LeastRecentlyUsed {
+    /// Find the `num` least recently used cuboids in the cache.
+    ///
+    /// # Arguments:
+    ///
+    /// * `num` - How many cuboids to retrieve.
+    fn find_lru(&self, num: u32) -> Vec<models::Cuboid>;
+}
+
 /// Empty manager.
 pub struct NoneManager {}
 
@@ -132,6 +141,17 @@ pub struct SqliteUsageManager {
     cache_root_id: i32,
     /// The byte length of the CUBOID_ROOT_PATH.
     path_len: usize,
+}
+
+impl LeastRecentlyUsed for SqliteUsageManager {
+    fn find_lru(&self, num: u32) -> Vec<db::models::Cuboid> {
+        use db::schema::cuboids::dsl::*;
+        cuboids
+            .order(last_accessed)
+            .limit(num as i64)
+            .load::<models::Cuboid>(&self.connection)
+            .expect("Error getting LRU cuboids")
+    }
 }
 
 impl UsageManager for SqliteUsageManager {
@@ -201,6 +221,11 @@ impl SqliteUsageManager {
     /// Get the DB connection used by the manager (mainly for testing).
     pub fn get_connection(&self) -> &SqliteConnection {
         &self.connection
+    }
+
+    /// Get the cache root id (for testing).
+    pub fn get_cache_root(&self) -> i32 {
+        self.cache_root_id
     }
 
     /// Looks up the id of the cache root

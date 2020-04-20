@@ -14,6 +14,6 @@ index 3f967d4..d1ae610 100644
          cache_root -> Integer,
          cube_key -> Text,
          requests -> BigInt,
-         created -> Nullable<Text>,
-         last_accessed -> Nullable<Text>,
+         created -> Timestamp,
+         last_accessed -> Timestamp,
      }
