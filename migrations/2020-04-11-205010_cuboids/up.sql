@@ -8,8 +8,8 @@ CREATE TABLE cuboids (
     cache_root INT NOT NULL,
     cube_key VARCHAR(512) NOT NULL,
     requests BIGINT NOT NULL,
-    created TEXT DEFAULT CURRENT_TIMESTAMP,
-    last_accessed TEXT DEFAULT CURRENT_TIMESTAMP,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_accessed DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cache_root)
         REFERENCES cache_roots(id)
         ON DELETE CASCADE

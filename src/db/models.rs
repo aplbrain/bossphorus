@@ -1,5 +1,6 @@
 use super::schema;
 use chrono::prelude::*;
+use diesel::*;
 use schema::cache_roots;
 use schema::cuboids;
 
@@ -15,14 +16,14 @@ pub struct NewCacheRoot {
     pub path: String,
 }
 
-#[derive(Identifiable, Queryable)]
+#[derive(Debug, Identifiable, Insertable, PartialEq, Queryable)]
 pub struct Cuboid {
     pub id: i64,
-    pub cache_root: i64,
+    pub cache_root: i32,
     pub cube_key: String,
     pub requests: i64,
-    pub created: DateTime<Utc>,
-    pub last_accessed: DateTime<Utc>,
+    pub created: NaiveDateTime,
+    pub last_accessed: NaiveDateTime,
 }
 
 #[derive(Insertable)]
