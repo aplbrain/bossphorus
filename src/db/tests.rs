@@ -78,6 +78,8 @@ fn test_find_lru() {
 
     let actual = sql_mgr.find_lru(rows_to_get);
 
+    assert_eq!(rows_to_get as usize, actual.len());
+
     // Rows returned show be equal to the last n rows of `exp_rows`.
     for row in exp_rows.iter().rev().zip(actual.iter()) {
         assert_eq!(row.0, row.1);
