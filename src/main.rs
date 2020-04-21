@@ -135,7 +135,7 @@ fn _fetch_data_to_ndarray(
 /// This endpoint returns data in blosc-compressed format.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "application/blosc"
+    format = "application/blosc", rank=1
 )]
 fn download_blosc(
     collection: &RawStr,
@@ -200,7 +200,7 @@ fn download_blosc(
 /// data channels.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "image/jpeg"
+    format = "image/jpeg", rank=2
 )]
 fn download_jpeg(
     collection: &RawStr,
@@ -252,16 +252,19 @@ fn download_jpeg(
 
     // DynamicImage::from
     let image_buffer = ImageBuffer::from_raw(
-        ndarray_data.shape()[0] as u32,
-        (ndarray_data.shape()[1] * ndarray_data.shape()[2]) as u32,
+        ndarray_data.shape()[2] as u32,
+        (ndarray_data.shape()[1] * ndarray_data.shape()[0]) as u32,
         ndarray_data.into_raw_vec(),
     )
     .unwrap();
 
-    let mut cur: Cursor<Vec<u8>> = Cursor::new(vec![]);
+    let mut cur: Cursor<Vec<u8>> = Cursor::new(vec![1, 2, 3, 4]);
     DynamicImage::ImageLuma8(image_buffer)
         .write_to(&mut cur, image::ImageFormat::Jpeg)
         .unwrap();
+
+    // print!("{}", format!("{:?}",cur));
+    cur.set_position(0);
 
     let response = Stream::from(cur);
     Ok(response)
