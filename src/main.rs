@@ -7,7 +7,11 @@ extern crate rocket;
 use bossphorus::usage_manager::{self, UsageManagerType};
 use bossphorus::config;
 use bossphorus::data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
+
+// Data-types:
+use image::{DynamicImage, ImageBuffer};
 use ndarray::Array;
+
 use rocket::data::Data;
 use rocket::fairing::AdHoc;
 use rocket::http::RawStr;
@@ -44,6 +48,11 @@ struct ChannelMetadata {
 /// # Arguments:
 ///
 /// * `string_value` - A string that contains two integers separated by a colon
+///
+/// # Returns:
+///
+/// * Vec<u64>[2]
+///
 fn colon_delim_str_to_extents(string_value: &RawStr) -> Vec<u64> {
     string_value
         .split(":")
@@ -51,6 +60,10 @@ fn colon_delim_str_to_extents(string_value: &RawStr) -> Vec<u64> {
         .collect()
 }
 
+/// Get the metadata dictionary for a channel.
+///
+/// This endpoint returns the JSONified `ChannelMetadata` for a channel.
+///
 #[get("/collection/<collection>/experiment/<experiment>/channel/<channel>")]
 fn get_channel_metadata(
     collection: &RawStr,
@@ -73,37 +86,24 @@ fn get_channel_metadata(
     })
 }
 
-#[get("/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>")]
-fn download(
+/// This retrieves the data from the DataManager and returns the ndarray.
+///
+/// The data can then be converted to an appropriate output format.
+fn _fetch_data_to_ndarray(
     collection: &RawStr,
     experiment: &RawStr,
     channel: &RawStr,
     res: u8,
-    xs: &RawStr,
-    ys: &RawStr,
-    zs: &RawStr,
+    origin: Vector3,
+    destination: Vector3,
     bosshost: State<config::BossHost>,
     bosstoken: State<config::BossToken>,
     tracking_enabled: State<TrackingUsage>,
-) -> Result<Stream<Cursor<Vec<u8>>>, std::io::Error> {
-    // Parse out the extents:
-    let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
-    let y_extents: Vec<u64> = colon_delim_str_to_extents(ys);
-    let z_extents: Vec<u64> = colon_delim_str_to_extents(zs);
-
-    // Try to convert to origin-and-shape:
-    let origin = Vector3 {
-        x: x_extents[0],
-        y: y_extents[0],
-        z: z_extents[0],
-    };
-    let destination = Vector3 {
-        x: x_extents[1],
-        y: y_extents[1],
-        z: z_extents[1],
-    };
-
-    // TODO: Assert that shape is positive
+) -> ndarray::Array3<u8> {
+    // TODO: Confirm that shape is positive
+    // if origin.x >= destination.x || origin.y >= destination.y || origin.z >= destination.z {
+    //     // Error
+    // }
 
     // Perform the data-read:
     let fm = ChunkedFileDataManager::new_with_layer(
@@ -121,21 +121,152 @@ fn download(
         tracking_enabled.0,
     );
 
-    let result = fm
-        .get_data(
-            format!("bossdb://{}/{}/{}", collection, experiment, channel),
-            res,
-            origin,
-            destination,
-        )
-        .into_raw_vec();
+    let result = fm.get_data(
+        format!("bossdb://{}/{}/{}", collection, experiment, channel),
+        res,
+        origin,
+        destination,
+    );
+    return result;
+}
+
+/// Download a 3D cutout of data.
+///
+/// This endpoint returns data in blosc-compressed format.
+#[get(
+    "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
+    format = "application/blosc", rank=1
+)]
+fn download_blosc(
+    collection: &RawStr,
+    experiment: &RawStr,
+    channel: &RawStr,
+    res: u8,
+    xs: &RawStr,
+    ys: &RawStr,
+    zs: &RawStr,
+    bosshost: State<config::BossHost>,
+    bosstoken: State<config::BossToken>,
+    tracking_enabled: State<TrackingUsage>,
+) -> Result<Stream<Cursor<Vec<u8>>>, String> {
+    // Parse out the extents:
+    let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
+    let y_extents: Vec<u64> = colon_delim_str_to_extents(ys);
+    let z_extents: Vec<u64> = colon_delim_str_to_extents(zs);
+
+    // Try to convert to origin-and-shape:
+    let origin = Vector3 {
+        x: x_extents[0],
+        y: y_extents[0],
+        z: z_extents[0],
+    };
+    let destination = Vector3 {
+        x: x_extents[1],
+        y: y_extents[1],
+        z: z_extents[1],
+    };
+
+    let ndarray_data = _fetch_data_to_ndarray(
+        collection,
+        experiment,
+        channel,
+        res,
+        origin,
+        destination,
+        bosshost,
+        bosstoken,
+        tracking_enabled,
+    )
+    .into_raw_vec();
 
     let ctx = blosc::Context::new();
-    let compressed: blosc::Buffer<u8> = ctx.compress(&result[..]);
-
+    let compressed: blosc::Buffer<u8> = ctx.compress(&ndarray_data[..]);
     let cur: Cursor<Vec<u8>> = Cursor::new(compressed.into());
     let response = Stream::from(cur);
+    Ok(response)
+}
 
+/// Download a 3D cutout of data.
+///
+/// This endpoint returns data
+/// in JPG filmstrip format. In order to get a JPG filmstrip response, you
+/// must pass a `Content-Type` header with a value of `image/jpeg`. For
+/// more information on this, check out the BossDB documentaton
+/// (https://docs.theboss.io/docs/cutout-get#section-getting-data-volumes).
+///
+/// ## JPEG Filmstrip
+/// This option returns a single JPEG encoded image, where each slice in the
+/// z-dimension is concatenated in the y-dimension. This only works for `uint8`
+/// data channels.
+#[get(
+    "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
+    format = "image/jpeg", rank=2
+)]
+fn download_jpeg(
+    collection: &RawStr,
+    experiment: &RawStr,
+    channel: &RawStr,
+    res: u8,
+    xs: &RawStr,
+    ys: &RawStr,
+    zs: &RawStr,
+    bosshost: State<config::BossHost>,
+    bosstoken: State<config::BossToken>,
+    tracking_enabled: State<TrackingUsage>,
+) -> Result<Stream<Cursor<Vec<u8>>>, String> {
+    // Parse out the extents:
+    let x_extents: Vec<u64> = colon_delim_str_to_extents(xs);
+    let y_extents: Vec<u64> = colon_delim_str_to_extents(ys);
+    let z_extents: Vec<u64> = colon_delim_str_to_extents(zs);
+
+    // Try to convert to origin-and-shape:
+    let origin = Vector3 {
+        x: x_extents[0],
+        y: y_extents[0],
+        z: z_extents[0],
+    };
+    let destination = Vector3 {
+        x: x_extents[1],
+        y: y_extents[1],
+        z: z_extents[1],
+    };
+
+    // TODO: Confirm that shape is positive
+    // if origin.x >= destination.x || origin.y >= destination.y || origin.z >= destination.z {
+    //     // Error
+    // }
+
+    // Perform the data-read:
+
+    let ndarray_data = _fetch_data_to_ndarray(
+        collection,
+        experiment,
+        channel,
+        res,
+        origin,
+        destination,
+        bosshost,
+        bosstoken,
+        tracking_enabled,
+    );
+
+    // DynamicImage::from
+    let image_buffer = ImageBuffer::from_raw(
+        ndarray_data.shape()[2] as u32,
+        (ndarray_data.shape()[1] * ndarray_data.shape()[0]) as u32,
+        ndarray_data.into_raw_vec(),
+    )
+    .unwrap();
+
+    let mut cur: Cursor<Vec<u8>> = Cursor::new(vec![1, 2, 3, 4]);
+    DynamicImage::ImageLuma8(image_buffer)
+        .write_to(&mut cur, image::ImageFormat::Jpeg)
+        .unwrap();
+
+    // print!("{}", format!("{:?}",cur));
+    cur.set_position(0);
+
+    let response = Stream::from(cur);
     Ok(response)
 }
 
@@ -214,7 +345,7 @@ fn upload(
 
 #[get("/")]
 fn index() -> String {
-    return format!("Hello world!");
+    return format!("Bossphorus v0.0.1");
 }
 
 #[catch(404)]
@@ -238,7 +369,7 @@ fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
                 usage_manager::run(kind);
                 true
             }
-        },
+        }
     };
     Ok(rocket.manage(TrackingUsage(tracking)))
 }
@@ -247,7 +378,13 @@ fn main() {
     rocket::ignite()
         .mount(
             "/v1",
-            routes![index, get_channel_metadata, upload, download],
+            routes![
+                index,
+                get_channel_metadata,
+                upload,
+                download_blosc,
+                download_jpeg
+            ],
         )
         .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
         .attach(AdHoc::on_attach("Boss Token", config::get_boss_token))
