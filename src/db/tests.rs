@@ -1,16 +1,18 @@
 use super::models::Cuboid;
+use super::schema;
+use super::{LeastRecentlyUsed, SqliteCacheManager};
 use crate::config;
-use crate::usage_manager::{LeastRecentlyUsed, SqliteUsageManager, UsageManager};
+use crate::usage_manager::UsageManager;
 use chrono::prelude::*;
 use diesel::prelude::*;
 
 diesel_migrations::embed_migrations!();
 
-/// Set up an in-memory Sqlite DB and return a SqliteUsageManager for testing.
-fn setup_db() -> SqliteUsageManager {
+/// Set up an in-memory Sqlite DB and return a SqliteCacheManager for testing.
+fn setup_db() -> SqliteCacheManager {
     let connection = SqliteConnection::establish(":memory:").unwrap();
     embedded_migrations::run(&connection).unwrap();
-    SqliteUsageManager::init(connection)
+    SqliteCacheManager::init(connection)
 }
 
 #[test]
@@ -25,7 +27,7 @@ fn test_log_new_request() {
         cuboids
             .select((cube_key, requests))
             .filter(cube_key.eq(key))
-            .first::<(String, i64)>(sql_mgr.get_connection())
+            .first::<(String, i64)>(&sql_mgr.connection)
     );
 }
 
@@ -42,7 +44,7 @@ fn test_log_repeated_request() {
         cuboids
             .select((cube_key, requests))
             .filter(cube_key.eq(key))
-            .first::<(String, i64)>(sql_mgr.get_connection())
+            .first::<(String, i64)>(&sql_mgr.connection)
     );
 }
 
@@ -60,7 +62,7 @@ fn test_find_lru() {
             let timestamp = Utc.ymd(2020, 4, 19).and_hms(23 - i, 0, 0).naive_utc();
             Cuboid {
                 id: (i + 1) as i64,
-                cache_root: sql_mgr.get_cache_root(),
+                cache_root: sql_mgr.cache_root_id,
                 cube_key: format!("{}/{}", key, i),
                 requests: i as i64,
                 created: timestamp,
@@ -72,7 +74,7 @@ fn test_find_lru() {
     for row in &exp_rows {
         diesel::insert_into(cuboids)
             .values(row)
-            .execute(sql_mgr.get_connection())
+            .execute(&sql_mgr.connection)
             .unwrap();
     }
 
@@ -84,4 +86,52 @@ fn test_find_lru() {
     for row in exp_rows.iter().rev().zip(actual.iter()) {
         assert_eq!(row.0, row.1);
     }
+}
+
+#[test]
+fn test_get_cache_root_path_from_map_new_lookup() {
+    use schema::cache_roots::dsl::*;
+
+    let mut sql_mgr = setup_db();
+    let root = "/some/folder";
+    let cache_root_id = 100;
+    diesel::insert_into(cache_roots)
+        .values(&(id.eq(cache_root_id), path.eq(root)))
+        .execute(&sql_mgr.connection)
+        .expect("Could not add cache root");
+    let actual = sql_mgr.get_cache_root_path_from_map(cache_root_id).unwrap();
+    assert_eq!(root, actual);
+}
+
+#[test]
+fn test_get_cache_root_path_from_map_existing_lookup() {
+    let mut sql_mgr = setup_db();
+    let cache_root_id = 100;
+    let root_path = "/some/other/folder";
+    sql_mgr
+        .cache_root_map
+        .insert(cache_root_id, root_path.to_string());
+    assert_eq!(
+        root_path,
+        sql_mgr.get_cache_root_path_from_map(cache_root_id).unwrap()
+    );
+}
+
+#[test]
+fn test_remove_cuboid_entry() {
+    use super::schema::cuboids::dsl::*;
+
+    let sql_mgr = setup_db();
+    let key = "/new_key";
+    sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key));
+
+    let row = sql_mgr.find_lru(1);
+
+    sql_mgr.remove_cuboid_entry(row[0].id);
+
+    let results = cuboids
+        .select(id)
+        .filter(id.eq(row[0].id))
+        .first::<i64>(&sql_mgr.connection);
+    assert_eq!(false, results.is_ok());
 }
