@@ -7,7 +7,7 @@
 /// want to, you can use `data_manager::get_cuboids_and_indices`, which is
 /// a lot prettier than my Python implementation, if I do say so myself.
 use crate::intern;
-use crate::usage_manager;
+use crate::usage_tracker;
 
 use intern::remote::BossRemote;
 use ndarray::{s, Array, Array3};
@@ -272,7 +272,7 @@ impl DataManager for ChunkedFileDataManager {
             );
 
             if self.track_usage {
-                let mutex = usage_manager::get_sender();
+                let mutex = usage_tracker::get_sender();
                 let tx = mutex.lock().unwrap();
                 if !tx.send(filename.to_string()).is_ok() {
                     // ToDo: log some kind of error that the usage manager went down.

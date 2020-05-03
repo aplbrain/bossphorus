@@ -9,4 +9,4 @@ pub mod config;
 pub mod data_manager;
 pub mod db;
 pub mod intern;
-pub mod usage_manager;
+pub mod usage_tracker;
