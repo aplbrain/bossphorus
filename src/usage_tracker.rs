@@ -1,53 +1,61 @@
-/// Usage management module.
+/// Usage Tracker module.
 ///
 /// Tracks usage of the cached cuboids stored locally on disk.
 ///
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
-use super::db::SqliteCacheManager;
+use super::db::{MaxCountLruStrategy, SimpleCacheManager, SqliteCacheInterface};
+use std::cell::RefCell;
 use std::env;
+use std::rc::Rc;
 use std::sync;
 use std::sync::mpsc;
 use std::thread;
 
 /// User string names for selecting usage managers.
-const NONE_MANAGER: &str = "none";
-const CONSOLE_MANAGER: &str = "console";
-const DB_MANAGER: &str = "db";
+const NONE_TRACKER: &str = "none";
+const CONSOLE_TRACKER: &str = "console";
+const DB_TRACKER: &str = "db";
+
+const DEFAULT_MAX_CUBOIDS: u32 = 1000;
 
 const DB_URL_ENV_NAME: &str = "BOSSPHORUS_DB_URL";
 
-pub enum UsageManagerType {
+pub enum UsageTrackerType {
     None,
     Console,
     Sqlite,
 }
 
 /// Map string name of usage manager to enum.  If no match is found, return
-/// UsageManagerType::None.
-pub fn get_manager_type(name: &str) -> UsageManagerType {
+/// UsageTrackerType::None.
+pub fn get_manager_type(name: &str) -> UsageTrackerType {
     let lowered = name.to_lowercase();
     match lowered.as_str() {
-        CONSOLE_MANAGER => UsageManagerType::Console,
-        NONE_MANAGER => UsageManagerType::None,
-        DB_MANAGER => UsageManagerType::Sqlite,
+        CONSOLE_TRACKER => UsageTrackerType::Console,
+        NONE_TRACKER => UsageTrackerType::None,
+        DB_TRACKER => UsageTrackerType::Sqlite,
         _ => {
-            println!("Warning, got unknown user manager: {}", name);
-            UsageManagerType::None
+            println!("Warning, got unknown usage tracker: {}", name);
+            UsageTrackerType::None
         }
     }
 }
 
-fn usage_manager_factory(kind: UsageManagerType) -> Box<dyn UsageManager> {
+fn usage_manager_factory(kind: UsageTrackerType) -> Box<dyn UsageTracker> {
     match kind {
-        UsageManagerType::None => Box::new(NoneManager {}),
-        UsageManagerType::Console => Box::new(ConsoleUsageManager {}),
-        UsageManagerType::Sqlite => {
+        UsageTrackerType::None => Box::new(NoneTracker {}),
+        UsageTrackerType::Console => Box::new(ConsoleUsageTracker {}),
+        UsageTrackerType::Sqlite => {
             let db_url = env::var(DB_URL_ENV_NAME).expect(&format!(
                 "{} environment variable must be set",
                 &DB_URL_ENV_NAME
             ));
-            Box::new(SqliteCacheManager::new(&db_url))
+            let db_interface = SqliteCacheInterface::new(&db_url);
+            let rc_db_iface = Rc::new(RefCell::new(db_interface));
+            let clone = Rc::clone(&rc_db_iface);
+            let strategy = MaxCountLruStrategy::new(DEFAULT_MAX_CUBOIDS, rc_db_iface);
+            Box::new(SimpleCacheManager::new(clone, strategy))
         }
     }
 }
@@ -74,8 +82,8 @@ pub fn get_sender() -> &'static sync::Mutex<mpsc::Sender<String>> {
 ///
 /// * `kind` - Which usage manager to start
 /// * `cuboid_root_path` - Root of cached cuboids
-pub fn run(kind: UsageManagerType) {
-    if let UsageManagerType::None = kind {
+pub fn run(kind: UsageTrackerType) {
+    if let UsageTrackerType::None = kind {
         return;
     }
 
@@ -88,32 +96,32 @@ pub fn run(kind: UsageManagerType) {
     }
 
     thread::spawn(move || {
-        let usage_mgr = usage_manager_factory(kind);
+        let mut usage_mgr = usage_manager_factory(kind);
         for key in rx {
             usage_mgr.log_request(key);
         }
     });
 }
 
-pub trait UsageManager {
+pub trait UsageTracker {
     /// Log request to console, file, or DB.
-    fn log_request(&self, key: String);
+    fn log_request(&mut self, key: String);
 }
 
-/// Empty manager.
-pub struct NoneManager {}
+/// Empty tracker.
+pub struct NoneTracker {}
 
-impl UsageManager for NoneManager {
-    fn log_request(&self, _key: String) {}
+impl UsageTracker for NoneTracker {
+    fn log_request(&mut self, _key: String) {}
 }
 
-/// Proof of concept manager.
-pub struct ConsoleUsageManager {}
+/// Proof of concept tracker.
+pub struct ConsoleUsageTracker {}
 
-impl UsageManager for ConsoleUsageManager {
+impl UsageTracker for ConsoleUsageTracker {
     /// Most basic manager - output to console.
 
-    fn log_request(&self, key: String) {
+    fn log_request(&mut self, key: String) {
         println!("Request: {}", key);
     }
 }

@@ -80,7 +80,7 @@ pub fn get_boss_token(rocket: Rocket) -> Result<Rocket, Rocket> {
 }
 
 /// Boss token used for auth.
-pub struct UsageManager(pub String);
+pub struct UsageTracker(pub String);
 
 const USAGE_MGR_ENV_NAME: &str = "USAGE_MGR";
 const USAGE_MGR_ROCKET_CFG: &str = "usage_mgr";
@@ -99,5 +99,5 @@ pub fn get_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
                 .to_string();
         },
     }
-    Ok(rocket.manage(UsageManager(usage_mgr)))
+    Ok(rocket.manage(UsageTracker(usage_mgr)))
 }
