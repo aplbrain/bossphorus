@@ -141,11 +141,9 @@ pub fn get_cuboids_and_indices(
         z: coords_stop.z / cuboid_size.z,
     };
 
-    for cuboid_index_x in start_cuboid.x..=stop_cuboid.x {
-        for cuboid_index_y in start_cuboid.y..=stop_cuboid.y {
-            for cuboid_index_z in start_cuboid.z..=stop_cuboid.z {
-                // if overflow { cuboid_size } else { size % cuboid_size }
-
+    for cuboid_index_x in start_cuboid.x..stop_cuboid.x {
+        for cuboid_index_y in start_cuboid.y..stop_cuboid.y {
+            for cuboid_index_z in start_cuboid.z..stop_cuboid.z {
                 // TODO: This entire block is hideous.
                 let start_coords = Vector3 {
                     x: if coords_start.x <= cuboid_size.x * cuboid_index_x {
