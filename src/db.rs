@@ -218,6 +218,8 @@ impl LeastRecentlyUsed for SqliteCacheInterface {
     }
 }
 
+diesel_migrations::embed_migrations!();
+
 impl SqliteCacheInterface {
     /// Constructor.
     ///
@@ -228,6 +230,7 @@ impl SqliteCacheInterface {
     pub fn new(db_url: &str) -> SqliteCacheInterface {
         let connection =
             SqliteConnection::establish(db_url).expect(&format!("Error connecting to {}", db_url));
+        embedded_migrations::run(&connection).expect("Error running database migrations");
         SqliteCacheInterface::init(connection, Rc::new(RealFileRemover {}))
     }
 
