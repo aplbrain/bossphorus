@@ -13,9 +13,18 @@ It is bewildering how much faster this is than the Python implementation.
 
 See [Feature Parity](docs/Features.md) for more information.
 
+
+## Disk Usage
+
+Bossphorus caches cuboids in the `uploads` folder that's created in the current
+working directory.  Currently, it will cache up to 1000 cuboids in this folder.
+The least recently used cuboids are removed when the cuboid limit is reached.
+
+
 ## Configuration
 
 Environment variables have precedence over the `Rocket.toml` config file.
+
 
 ### Environment Variables
 
@@ -41,7 +50,8 @@ bosstoken = "public"
 
 ## Development
 
-Blosc must be installed manually via a package manager to build.
+Blosc must be installed manually via a package manager to build.  SQLite is
+required, but it included with MacOS by default.
 
 For MacOS:
 
@@ -49,10 +59,16 @@ For MacOS:
 brew install c-blosc
 ```
 
-For Ubuntu-like:
+For Debian based Linux distros:
 
 ```shell
-sudo apt install libblosc-dev
+sudo apt-get install libblosc-dev sqlite3
+```
+
+For RPM based Linux distros:
+
+```shell
+sudo yum install blosc sqlite
 ```
 
 
@@ -61,6 +77,7 @@ Due to use of the Rocket web server crate, the nightly Rust toolchain must be us
 ```shell
 rustup override set nightly
 ```
+
 
 ## Releases
 

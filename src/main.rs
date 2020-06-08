@@ -355,14 +355,14 @@ fn not_found(_req: &Request) { /* .. */
 /// Is usage tracking enabled?
 pub struct TrackingUsage(pub bool);
 
-/// Start the usage manager if it's turned on.  If manager started, the
+/// Start the usage tracker if it's turned on.  If tracker started, the
 /// TrackingUsage state variable is set to true.
-fn start_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
+fn start_usage_tracker(rocket: Rocket) -> Result<Rocket, Rocket> {
     let mgr = rocket.state::<config::UsageTracker>();
     let tracking: bool = match mgr {
         None => false,
         Some(mgr_type) => {
-            let kind = usage_tracker::get_manager_type(&mgr_type.0);
+            let kind = usage_tracker::get_tracker_type(&mgr_type.0);
             if let UsageTrackerType::None = kind {
                 false
             } else {
@@ -389,10 +389,10 @@ fn main() {
         .attach(AdHoc::on_attach("Boss Host", config::get_boss_host))
         .attach(AdHoc::on_attach("Boss Token", config::get_boss_token))
         .attach(AdHoc::on_attach(
-            "Usage Manager Config",
-            config::get_usage_mgr,
+            "Usage Tracker Config",
+            config::get_usage_tracker,
         ))
-        .attach(AdHoc::on_attach("Usage Manager Start", start_usage_mgr))
+        .attach(AdHoc::on_attach("Usage Tracker Start", start_usage_tracker))
         .register(catchers![not_found])
         .launch();
 }
