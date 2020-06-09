@@ -3,11 +3,9 @@ address = "localhost"
 port = 8090
 bosshost = "api.bossdb.io"
 bosstoken = "public"
-bossusage_mgr = "none"
 
 [production]
 address = "0.0.0.0"
 port = 8090
 bosshost = "api.bossdb.io"
 bosstoken = "public"
-bossusage_mgr = "none"

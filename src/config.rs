@@ -13,6 +13,10 @@ use std::fs;
 /// Thus, keeping this as a simple constant for now.
 pub const CUBOID_ROOT_PATH: &str = "uploads";
 
+/// Until CUBOID_ROOT_PATH is put into a config file, also store the db in
+/// a file placed next to the folder storing the cached cuboids.
+pub const DB_URL: &str = "./cache-db.sqlite";
+
 /// Get the absolute path of the cuboid root folder.
 pub fn get_cuboid_root_abs_path() -> String {
     let path = fs::canonicalize(CUBOID_ROOT_PATH);
@@ -79,25 +83,30 @@ pub fn get_boss_token(rocket: Rocket) -> Result<Rocket, Rocket> {
     Ok(rocket.manage(BossToken(boss_token)))
 }
 
-/// Boss token used for auth.
+/// Boss usage tracker.
 pub struct UsageTracker(pub String);
 
-const USAGE_MGR_ENV_NAME: &str = "USAGE_MGR";
-const USAGE_MGR_ROCKET_CFG: &str = "usage_mgr";
-const USAGE_MGR_DEFAULT: &str = "none";
+/// User string names for selecting usage trackers.
+pub const NONE_TRACKER: &str = "none";
+pub const CONSOLE_TRACKER: &str = "console";
+pub const DB_TRACKER: &str = "db";
 
-/// Gets the usage manager to use.  First checks for an environment
+const USAGE_TRACKER_ENV_NAME: &str = "USAGE_TRACKER";
+const USAGE_TRACKER_ROCKET_CFG: &str = "usage_tracker";
+const USAGE_TRACKER_DEFAULT: &str = DB_TRACKER;
+
+/// Gets the usage tracker to use.  First checks for an environment
 /// variable.  Then checks for a value in the Rocket.toml file.
-pub fn get_usage_mgr(rocket: Rocket) -> Result<Rocket, Rocket> {
-    let usage_mgr: String;
-    match env::var(USAGE_MGR_ENV_NAME) {
-        Ok(val) => usage_mgr = val,
+pub fn get_usage_tracker(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let usage_tracker: String;
+    match env::var(USAGE_TRACKER_ENV_NAME) {
+        Ok(val) => usage_tracker = val,
         Err(_) => {
-            usage_mgr = rocket.config()
-                .get_str(USAGE_MGR_ROCKET_CFG)
-                .unwrap_or(USAGE_MGR_DEFAULT)
+            usage_tracker = rocket.config()
+                .get_str(USAGE_TRACKER_ROCKET_CFG)
+                .unwrap_or(USAGE_TRACKER_DEFAULT)
                 .to_string();
         },
     }
-    Ok(rocket.manage(UsageTracker(usage_mgr)))
+    Ok(rocket.manage(UsageTracker(usage_tracker)))
 }

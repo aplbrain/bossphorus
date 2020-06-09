@@ -5,21 +5,15 @@
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
 use super::db::{MaxCountLruStrategy, SimpleCacheManager, SqliteCacheInterface};
+use super::config::{NONE_TRACKER, CONSOLE_TRACKER, DB_TRACKER, DB_URL};
 use std::cell::RefCell;
-use std::env;
 use std::rc::Rc;
 use std::sync;
 use std::sync::mpsc;
 use std::thread;
 
-/// User string names for selecting usage managers.
-const NONE_TRACKER: &str = "none";
-const CONSOLE_TRACKER: &str = "console";
-const DB_TRACKER: &str = "db";
-
+// ToDo: make this configurable.
 const DEFAULT_MAX_CUBOIDS: u32 = 1000;
-
-const DB_URL_ENV_NAME: &str = "BOSSPHORUS_DB_URL";
 
 pub enum UsageTrackerType {
     None,
@@ -27,9 +21,9 @@ pub enum UsageTrackerType {
     Sqlite,
 }
 
-/// Map string name of usage manager to enum.  If no match is found, return
+/// Map string name of usage tracker to enum.  If no match is found, return
 /// UsageTrackerType::None.
-pub fn get_manager_type(name: &str) -> UsageTrackerType {
+pub fn get_tracker_type(name: &str) -> UsageTrackerType {
     let lowered = name.to_lowercase();
     match lowered.as_str() {
         CONSOLE_TRACKER => UsageTrackerType::Console,
@@ -42,16 +36,12 @@ pub fn get_manager_type(name: &str) -> UsageTrackerType {
     }
 }
 
-fn usage_manager_factory(kind: UsageTrackerType) -> Box<dyn UsageTracker> {
+fn usage_tracker_factory(kind: UsageTrackerType) -> Box<dyn UsageTracker> {
     match kind {
         UsageTrackerType::None => Box::new(NoneTracker {}),
         UsageTrackerType::Console => Box::new(ConsoleUsageTracker {}),
         UsageTrackerType::Sqlite => {
-            let db_url = env::var(DB_URL_ENV_NAME).expect(&format!(
-                "{} environment variable must be set",
-                &DB_URL_ENV_NAME
-            ));
-            let db_interface = SqliteCacheInterface::new(&db_url);
+            let db_interface = SqliteCacheInterface::new(DB_URL);
             let rc_db_iface = Rc::new(RefCell::new(db_interface));
             let clone = Rc::clone(&rc_db_iface);
             let strategy = MaxCountLruStrategy::new(DEFAULT_MAX_CUBOIDS, rc_db_iface);
@@ -65,22 +55,22 @@ fn usage_manager_factory(kind: UsageTrackerType) -> Box<dyn UsageTracker> {
 /// like Rocket provides easy access to the worker threads.
 static mut SENDER_MUTEX: Option<sync::Mutex<mpsc::Sender<String>>> = None;
 
-/// Get the mutex so a thread may send a key to the usage manager.  run()
+/// Get the mutex so a thread may send a key to the usage tracker.  run()
 /// must have been called before this may be used.
 pub fn get_sender() -> &'static sync::Mutex<mpsc::Sender<String>> {
     unsafe {
         match &SENDER_MUTEX {
-            None => panic!("usage_manager.run() not called"),
+            None => panic!("usage_tracker.run() not called"),
             Some(mutex) => mutex,
         }
     }
 }
 
-/// Start the usage manager.  This should only be called ONCE.
+/// Start the usage tracker.  This should only be called ONCE.
 ///
 /// # Arguments:
 ///
-/// * `kind` - Which usage manager to start
+/// * `kind` - Which usage tracker to start
 /// * `cuboid_root_path` - Root of cached cuboids
 pub fn run(kind: UsageTrackerType) {
     if let UsageTrackerType::None = kind {
@@ -96,7 +86,7 @@ pub fn run(kind: UsageTrackerType) {
     }
 
     thread::spawn(move || {
-        let mut usage_mgr = usage_manager_factory(kind);
+        let mut usage_mgr = usage_tracker_factory(kind);
         for key in rx {
             usage_mgr.log_request(key);
         }
@@ -119,7 +109,7 @@ impl UsageTracker for NoneTracker {
 pub struct ConsoleUsageTracker {}
 
 impl UsageTracker for ConsoleUsageTracker {
-    /// Most basic manager - output to console.
+    /// Most basic tracker - output to console.
 
     fn log_request(&mut self, key: String) {
         println!("Request: {}", key);
