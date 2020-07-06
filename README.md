@@ -6,7 +6,9 @@ This is a reimplementation of the [Bossphorus](https://github.com/aplbrain/bossp
 
 ## Why?
 
-It is bewildering how much faster this is than the Python implementation.
+bossphorus simplifies data-access patterns for data that do not fit into RAM. When you write a 100-gigabyte file, bossphorus automatically slices your dataset up to fit in bite-sized pieces.
+
+When you request small pieces of your data for analysis, bossphorus intelligently serves only the parts you need, leaving the rest on disk.
 
 
 ## Feature Parity
