@@ -383,7 +383,6 @@ fn main() {
             routes![
                 index,
                 get_channel_metadata,
-                get_experiment_metadata,
                 upload,
                 download_blosc,
                 download_jpeg
