@@ -3,10 +3,11 @@
 #[macro_use]
 extern crate rocket;
 
-
-use bossphorus::usage_tracker::{self, UsageTrackerType};
 use bossphorus::config;
-use bossphorus::data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
+use bossphorus::data_manager::{
+    BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3,
+};
+use bossphorus::usage_tracker::{self, UsageTrackerType};
 
 // Data-types:
 use image::{DynamicImage, ImageBuffer};
@@ -41,6 +42,22 @@ struct ChannelMetadata {
     sources: Vec<String>,
     downsample_status: String,
     related: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ExperimentMetadata {
+    /// Metadata corresponding to an Experiment.
+    ///
+    /// A struct holder for the metadata returned by Bosslikes at the
+    /// Experiment-metadata endpoint.
+    name: String,
+    description: String,
+    collection: String,
+    coord_frame: String,
+    num_hierarchy_levels: i8,
+    hierarchy_method: String,
+    max_time_sample: i64,
+    creator: String,
 }
 
 /// Convert a colon-delimited extents variable into a `Vec<u64>` of len=2.
@@ -83,6 +100,24 @@ fn get_channel_metadata(
         sources: vec![],
         downsample_status: "DOWNSAMPLED".to_string(),
         related: vec![],
+    })
+}
+
+/// Get the metadata dictionary for an experiment.
+///
+/// This endpoint returns the JSONified `ExperimentMetadata` for an Experiment.
+///
+#[get("/collection/<collection>/experiment/<experiment>")]
+fn get_experiment_metadata(collection: &RawStr, experiment: &RawStr) -> Json<ExperimentMetadata> {
+    Json(ExperimentMetadata {
+        name: experiment.to_string(),
+        description: "".to_string(),
+        coord_frame: "".to_string(),
+        collection: collection.to_string(),
+        num_hierarchy_levels: 1,
+        hierarchy_method: "near_iso".to_string(),
+        max_time_sample: 0,
+        creator: "BOSSPHORUS_USER".to_string(),
     })
 }
 
@@ -135,7 +170,8 @@ fn _fetch_data_to_ndarray(
 /// This endpoint returns data in blosc-compressed format.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "application/blosc", rank=1
+    format = "application/blosc",
+    rank = 1
 )]
 fn download_blosc(
     collection: &RawStr,
@@ -200,7 +236,8 @@ fn download_blosc(
 /// data channels.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "image/jpeg", rank=2
+    format = "image/jpeg",
+    rank = 2
 )]
 fn download_jpeg(
     collection: &RawStr,
@@ -381,6 +418,7 @@ fn main() {
             routes![
                 index,
                 get_channel_metadata,
+                get_experiment_metadata,
                 upload,
                 download_blosc,
                 download_jpeg
