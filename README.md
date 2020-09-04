@@ -1,6 +1,11 @@
 <p align=center><img align=center src='https://user-images.githubusercontent.com/693511/77836507-0fc11300-712d-11ea-83a4-0c14b674378e.png' width=650 /></p>
 <h6 align=center>Bossphorus implementation in Rust</h6>
 
+<p align=center>
+<img alt="GitHub" src="https://img.shields.io/github/license/aplbrain/bossphorus?style=for-the-badge">
+<a href="https://github.com/aplbrain/bossphorus/actions"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/aplbrain/bossphorus/Rust?style=for-the-badge"></a>
+</p>
+
 This is a partial reimplementation of the BossDB REST API in [Rust](https://www.rust-lang.org/).
 
 
