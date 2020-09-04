@@ -3,10 +3,11 @@
 #[macro_use]
 extern crate rocket;
 
-
-use bossphorus::usage_tracker::{self, UsageTrackerType};
 use bossphorus::config;
-use bossphorus::data_manager::{BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3};
+use bossphorus::data_manager::{
+    BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3,
+};
+use bossphorus::usage_tracker::{self, UsageTrackerType};
 
 // Data-types:
 use image::{DynamicImage, ImageBuffer};
@@ -135,7 +136,8 @@ fn _fetch_data_to_ndarray(
 /// This endpoint returns data in blosc-compressed format.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "application/blosc", rank=1
+    format = "application/blosc",
+    rank = 1
 )]
 fn download_blosc(
     collection: &RawStr,
@@ -200,7 +202,8 @@ fn download_blosc(
 /// data channels.
 #[get(
     "/cutout/<collection>/<experiment>/<channel>/<res>/<xs>/<ys>/<zs>",
-    format = "image/jpeg", rank=2
+    format = "image/jpeg",
+    rank = 2
 )]
 fn download_jpeg(
     collection: &RawStr,
@@ -263,7 +266,6 @@ fn download_jpeg(
         .write_to(&mut cur, image::ImageFormat::Jpeg)
         .unwrap();
 
-    // print!("{}", format!("{:?}",cur));
     cur.set_position(0);
 
     let response = Stream::from(cur);
