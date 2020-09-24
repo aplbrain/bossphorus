@@ -775,7 +775,6 @@ impl DataManager for S3ChunkedDataManager {
             y: origin.y + data.len_of(ndarray::Axis(1)) as u64,
             z: origin.z + data.len_of(ndarray::Axis(0)) as u64,
         };
-        println!("{}", stop);
         let cuboids = get_cuboids_and_indices(origin, stop, self.cuboid_size);
         let boss_uri: Vec<&str> = uri.split("://").collect();
 
@@ -880,7 +879,7 @@ impl DataManager for S3ChunkedDataManager {
                 "application/blosc",
             );
             match put_result {
-                Ok(result) => println!("{}", str::from_utf8(&result.0).unwrap()),
+                Ok(_) => {}
                 Err(why) => println!("{}", why),
             }
         }

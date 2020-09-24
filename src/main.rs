@@ -60,6 +60,27 @@ struct ExperimentMetadata {
     creator: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct CollectionMetadata {
+    /// Metadata corresponding to a Collection.
+    ///
+    /// A struct holder for the metadata returned by Bosslikes at the
+    /// Collection-metadata endpoint.
+    name: String,
+    description: String,
+    creator: String,
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct CoordinateFrameMetadata {
+    /// Metadata corresponding to a CoordFrame.
+    ///
+    /// A struct holder for the metadata returned by Bosslikes at the
+    /// CoordFrame-metadata endpoint.
+    name: String,
+    description: String,
+    creator: String,
+}
+
 /// Convert a colon-delimited extents variable into a `Vec<u64>` of len=2.
 ///
 /// # Arguments:
@@ -117,6 +138,32 @@ fn get_experiment_metadata(collection: &RawStr, experiment: &RawStr) -> Json<Exp
         num_hierarchy_levels: 1,
         hierarchy_method: "anisotropic".to_string(),
         max_time_sample: 0,
+        creator: "BOSSPHORUS_USER".to_string(),
+    })
+}
+
+/// Get the metadata dictionary for a collection.
+///
+/// MOCK only.
+///
+#[get("/collection/<collection>")]
+fn get_collection_metadata(collection: &RawStr) -> Json<CollectionMetadata> {
+    Json(CollectionMetadata {
+        name: collection.to_string(),
+        description: "".to_string(),
+        creator: "BOSSPHORUS_USER".to_string(),
+    })
+}
+
+/// Get the metadata dictionary for a coordinate frame.
+///
+/// MOCK only.
+///
+#[get("/coord/<cfname>")]
+fn get_coordframe_metadata<'a>(cfname: &RawStr) -> Json<CoordinateFrameMetadata> {
+    Json(CoordinateFrameMetadata {
+        name: cfname.to_string(),
+        description: "".to_string(),
         creator: "BOSSPHORUS_USER".to_string(),
     })
 }
@@ -435,8 +482,10 @@ fn main() {
             "/v1",
             routes![
                 index,
+                get_collection_metadata,
                 get_channel_metadata,
                 get_experiment_metadata,
+                get_coordframe_metadata,
                 upload,
                 download_blosc,
                 download_jpeg
