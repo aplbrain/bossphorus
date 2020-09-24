@@ -44,6 +44,22 @@ struct ChannelMetadata {
     related: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct ExperimentMetadata {
+    /// Metadata corresponding to an Experiment.
+    ///
+    /// A struct holder for the metadata returned by Bosslikes at the
+    /// Experiment-metadata endpoint.
+    name: String,
+    description: String,
+    collection: String,
+    coord_frame: String,
+    num_hierarchy_levels: i8,
+    hierarchy_method: String,
+    max_time_sample: i64,
+    creator: String,
+}
+
 /// Convert a colon-delimited extents variable into a `Vec<u64>` of len=2.
 ///
 /// # Arguments:
@@ -84,6 +100,24 @@ fn get_channel_metadata(
         sources: vec![],
         downsample_status: "DOWNSAMPLED".to_string(),
         related: vec![],
+    })
+}
+
+/// Get the metadata dictionary for an experiment.
+///
+/// This endpoint returns the JSONified `ExperimentMetadata` for an Experiment.
+///
+#[get("/collection/<collection>/experiment/<experiment>")]
+fn get_experiment_metadata(collection: &RawStr, experiment: &RawStr) -> Json<ExperimentMetadata> {
+    Json(ExperimentMetadata {
+        name: experiment.to_string(),
+        description: "".to_string(),
+        coord_frame: "".to_string(),
+        collection: collection.to_string(),
+        num_hierarchy_levels: 1,
+        hierarchy_method: "near_iso".to_string(),
+        max_time_sample: 0,
+        creator: "BOSSPHORUS_USER".to_string(),
     })
 }
 
@@ -383,6 +417,7 @@ fn main() {
             routes![
                 index,
                 get_channel_metadata,
+                get_experiment_metadata,
                 upload,
                 download_blosc,
                 download_jpeg
