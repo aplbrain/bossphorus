@@ -5,7 +5,7 @@ extern crate rocket;
 
 use bossphorus::config;
 use bossphorus::data_manager::{
-    BossDBRelayDataManager, ChunkedFileDataManager, DataManager, Vector3,
+    BossDBRelayDataManager, ChunkedFileDataManager, DataManager, S3ChunkedDataManager, Vector3,
 };
 use bossphorus::usage_tracker::{self, UsageTrackerType};
 
@@ -112,10 +112,10 @@ fn get_experiment_metadata(collection: &RawStr, experiment: &RawStr) -> Json<Exp
     Json(ExperimentMetadata {
         name: experiment.to_string(),
         description: "".to_string(),
-        coord_frame: "".to_string(),
+        coord_frame: experiment.to_string(),
         collection: collection.to_string(),
         num_hierarchy_levels: 1,
-        hierarchy_method: "near_iso".to_string(),
+        hierarchy_method: "anisotropic".to_string(),
         max_time_sample: 0,
         creator: "BOSSPHORUS_USER".to_string(),
     })
@@ -141,19 +141,28 @@ fn _fetch_data_to_ndarray(
     // }
 
     // Perform the data-read:
-    let fm = ChunkedFileDataManager::new_with_layer(
-        config::CUBOID_ROOT_PATH.to_string(),
+    // let fm = ChunkedFileDataManager::new_with_layer(
+    //     config::CUBOID_ROOT_PATH.to_string(),
+    //     Vector3 {
+    //         x: 512,
+    //         y: 512,
+    //         z: 16,
+    //     },
+    //     Box::new(BossDBRelayDataManager::new(
+    //         "https".to_string(),
+    //         bosshost.0.to_string(),
+    //         bosstoken.0.to_string(),
+    //     )),
+    //     tracking_enabled.0,
+    // );
+    let fm = S3ChunkedDataManager::new(
+        "bossphorus-example".to_string(),
         Vector3 {
             x: 512,
             y: 512,
             z: 16,
         },
-        Box::new(BossDBRelayDataManager::new(
-            "https".to_string(),
-            bosshost.0.to_string(),
-            bosstoken.0.to_string(),
-        )),
-        tracking_enabled.0,
+        false,
     );
 
     let result = fm.get_data(
@@ -355,20 +364,30 @@ fn upload(
     let array = Array::from_shape_vec(shape_dimension, decompressed).unwrap();
 
     // Perform the data-write:
-    let fm = ChunkedFileDataManager::new_with_layer(
-        config::CUBOID_ROOT_PATH.to_string(),
+    // let fm = ChunkedFileDataManager::new_with_layer(
+    //     config::CUBOID_ROOT_PATH.to_string(),
+    //     Vector3 {
+    //         x: 512,
+    //         y: 512,
+    //         z: 16,
+    //     },
+    //     Box::new(BossDBRelayDataManager::new(
+    //         "https".to_string(),
+    //         bosshost.0.to_string(),
+    //         bosstoken.0.to_string(),
+    //     )),
+    //     tracking_enabled.0,
+    // );
+    let fm = S3ChunkedDataManager::new(
+        "bossphorus-example".to_string(),
         Vector3 {
             x: 512,
             y: 512,
             z: 16,
         },
-        Box::new(BossDBRelayDataManager::new(
-            "https".to_string(),
-            bosshost.0.to_string(),
-            bosstoken.0.to_string(),
-        )),
-        tracking_enabled.0,
+        false,
     );
+
     let result = fm.put_data(
         format!("bossdb://{}/{}/{}", collection, experiment, channel),
         res,

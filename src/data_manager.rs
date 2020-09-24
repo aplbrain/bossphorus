@@ -6,6 +6,8 @@
 /// one else should have to worry about slicing and dicing, but if you do
 /// want to, you can use `data_manager::get_cuboids_and_indices`, which is
 /// a lot prettier than my Python implementation, if I do say so myself.
+extern crate s3;
+
 use crate::intern;
 use crate::usage_tracker;
 
@@ -16,6 +18,13 @@ use std::fmt;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
+
+use std::str;
+
+use s3::bucket::Bucket;
+use s3::creds::Credentials;
+use s3::region::Region;
+use s3::S3Error;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Vector3 {
@@ -141,9 +150,9 @@ pub fn get_cuboids_and_indices(
         z: coords_stop.z / cuboid_size.z,
     };
 
-    for cuboid_index_x in start_cuboid.x..stop_cuboid.x {
-        for cuboid_index_y in start_cuboid.y..stop_cuboid.y {
-            for cuboid_index_z in start_cuboid.z..stop_cuboid.z {
+    for cuboid_index_x in start_cuboid.x..=stop_cuboid.x {
+        for cuboid_index_y in start_cuboid.y..=stop_cuboid.y {
+            for cuboid_index_z in start_cuboid.z..=stop_cuboid.z {
                 // TODO: This entire block is hideous.
                 let start_coords = Vector3 {
                     x: if coords_start.x <= cuboid_size.x * cuboid_index_x {
@@ -544,5 +553,341 @@ impl DataManager for BossDBRelayDataManager {
         _data: ndarray::Array3<u8>,
     ) -> bool {
         panic!("Putting data with the BossDB relay is currently not supported.")
+    }
+}
+
+pub struct S3ChunkedDataManager {
+    /// A DataManager that holds chunked data in S3.
+    ///
+    bucket_path: String,
+    cuboid_size: Vector3,
+    next_layer: Box<dyn DataManager>,
+    track_usage: bool,
+}
+
+struct S3Storage {
+    name: String,
+    region: Region,
+    credentials: Credentials,
+    bucket: String,
+    location_supported: bool,
+}
+
+impl S3ChunkedDataManager {
+    /// A DataManager handles data IO from disk (and eventually cache).
+    ///
+    /// Create a new DataManager with a bucket_path on disk to which cuboids
+    /// will be written, and a default cuboid_size (e.g. 512*512*16).
+    pub fn new(
+        bucket_path: String,
+        cuboid_size: Vector3,
+        track_usage: bool,
+    ) -> S3ChunkedDataManager {
+        // TODO: Check if s3 bucket exists.
+        return S3ChunkedDataManager {
+            bucket_path,
+            cuboid_size,
+            next_layer: Box::new(NullDataManager {}),
+            track_usage,
+        };
+    }
+
+    pub fn new_with_layer(
+        bucket_path: String,
+        cuboid_size: Vector3,
+        next_layer: Box<dyn DataManager>,
+        track_usage: bool,
+    ) -> S3ChunkedDataManager {
+        return S3ChunkedDataManager {
+            bucket_path,
+            cuboid_size,
+            next_layer,
+            track_usage,
+        };
+    }
+}
+
+impl DataManager for S3ChunkedDataManager {
+    /// Get data from a specified cutout region.
+    ///
+    /// # Arguments
+    ///
+    /// * `origin` - The start position of the cutout (global coords)
+    /// * `destination` - The end position in global coords
+    ///
+    /// # Returns
+    ///
+    /// * 3D Array
+    ///
+    fn get_data(
+        &self,
+        uri: String,
+        res: u8,
+        origin: Vector3,
+        destination: Vector3,
+    ) -> ndarray::Array3<u8> {
+        let cuboids = get_cuboids_and_indices(origin, destination, self.cuboid_size);
+
+        let boss_uri: Vec<&str> = uri.split("://").collect();
+
+        // Provision memory for the complete, constructed cube of data.
+        let mut large_array: Array3<u8> = Array::zeros((
+            (destination.z - origin.z) as usize,
+            (destination.y - origin.y) as usize,
+            (destination.x - origin.x) as usize,
+        ));
+
+        // TODO: s3 and bucket could live in struct scope rather than creating
+        // a new one on every function call.
+        // PRO: Lower overhead. CON: Possibly failure if the bucket or its
+        // permissions are changed in between calls?
+
+        // Create an S3 management object.
+        let s3 = S3Storage {
+            name: "aws".into(),
+            region: "us-east-1".parse().unwrap(),
+            credentials: Credentials::from_profile(Some("bossdb")).unwrap(),
+            // credentials: Credentials::from_env_specific(
+            //     Some("FOO"),
+            //     Some("BAR"),
+            //     None,
+            //     None,
+            // )?,
+            bucket: self.bucket_path.to_string(),
+            location_supported: true,
+        };
+
+        // Create the S3 bucket pointer:
+        let bucket = Bucket::new(&s3.bucket, s3.region, s3.credentials).unwrap();
+
+        for (cuboid_index, (start_ind, stop_ind)) in &cuboids {
+            // Get the cuboid from s3.
+            let filename = format!("{}/{}/{}", boss_uri[1], res, cuboid_index);
+
+            if self.track_usage {
+                let mutex = usage_tracker::get_sender();
+                let tx = mutex.lock().unwrap();
+                if !tx.send(filename.to_string()).is_ok() {
+                    // ToDo: log some kind of error that the usage manager went down.
+                }
+            }
+
+            // Get the coordinates of this cuboid out of the cutout volume:
+            let z_start = ((cuboid_index.z * self.cuboid_size.z) + start_ind.z) - origin.z;
+            let z_stop = ((cuboid_index.z * self.cuboid_size.z) + stop_ind.z) - origin.z;
+            let y_start = ((cuboid_index.y * self.cuboid_size.y) + start_ind.y) - origin.y;
+            let y_stop = ((cuboid_index.y * self.cuboid_size.y) + stop_ind.y) - origin.y;
+            let x_start = ((cuboid_index.x * self.cuboid_size.x) + start_ind.x) - origin.x;
+            let x_stop = ((cuboid_index.x * self.cuboid_size.x) + stop_ind.x) - origin.x;
+
+            // TODO: Verify that the object exists in S3
+            // let filepath = Path::new(&filename);
+            let array: Array3<u8>;
+            // Get existing data:
+
+            let file = bucket.get_object_blocking(filename);
+            match file {
+                Ok(data) => {
+                    array = Array::from_shape_vec(
+                        (
+                            self.cuboid_size.z as usize,
+                            self.cuboid_size.y as usize,
+                            self.cuboid_size.x as usize,
+                        ),
+                        data.0,
+                    )
+                    .unwrap();
+                }
+                Err(_) => {
+                    // TODO: This is a cache miss.
+                    // Right now, we just pass to the next layer, but we can
+                    // certainly be smarter about this.
+
+                    let z_cuboid_start = cuboid_index.z * self.cuboid_size.z;
+                    let z_cuboid_stop = (1 + cuboid_index.z) * self.cuboid_size.z;
+                    let y_cuboid_start = cuboid_index.y * self.cuboid_size.y;
+                    let y_cuboid_stop = (1 + cuboid_index.y) * self.cuboid_size.y;
+                    let x_cuboid_start = cuboid_index.x * self.cuboid_size.x;
+                    let x_cuboid_stop = (1 + cuboid_index.x) * self.cuboid_size.x;
+
+                    array = self.get_next_layer().get_data(
+                        boss_uri[1].to_string(),
+                        res,
+                        Vector3 {
+                            x: x_cuboid_start,
+                            y: y_cuboid_start,
+                            z: z_cuboid_start,
+                        },
+                        Vector3 {
+                            x: x_cuboid_stop,
+                            y: y_cuboid_stop,
+                            z: z_cuboid_stop,
+                        },
+                    );
+
+                    self.put_data(
+                        uri.clone(),
+                        res,
+                        Vector3 {
+                            x: x_cuboid_start,
+                            y: y_cuboid_start,
+                            z: z_cuboid_start,
+                        },
+                        array.clone(),
+                    );
+                }
+            }
+
+            let new_data = array.slice(s![
+                start_ind.z as usize..stop_ind.z as usize,
+                start_ind.y as usize..stop_ind.y as usize,
+                start_ind.x as usize..stop_ind.x as usize
+            ]);
+
+            // Insert data cutout into large array
+            large_array
+                .slice_mut(s![
+                    z_start as usize..z_stop as usize,
+                    y_start as usize..y_stop as usize,
+                    x_start as usize..x_stop as usize,
+                ])
+                .assign(&new_data);
+        }
+
+        return large_array;
+    }
+
+    /// Upload data (write to the files).
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The good stuff
+    /// * `origin` - The start position of the cutout (global coords)
+    /// * `destination` - The end position in global coords
+    ///
+    /// # Returns
+    ///
+    /// * Boolean of success
+    ///
+    fn put_data(&self, uri: String, res: u8, origin: Vector3, data: ndarray::Array3<u8>) -> bool {
+        let stop = Vector3 {
+            x: origin.x + data.len_of(ndarray::Axis(2)) as u64,
+            y: origin.y + data.len_of(ndarray::Axis(1)) as u64,
+            z: origin.z + data.len_of(ndarray::Axis(0)) as u64,
+        };
+        println!("{}", stop);
+        let cuboids = get_cuboids_and_indices(origin, stop, self.cuboid_size);
+        let boss_uri: Vec<&str> = uri.split("://").collect();
+
+        // TODO: s3 and bucket could live in struct scope rather than creating
+        // a new one on every function call.
+        // PRO: Lower overhead. CON: Possibly failure if the bucket or its
+        // permissions are changed in between calls?
+
+        // Create an S3 management object.
+        let s3 = S3Storage {
+            name: "aws".into(),
+            region: "us-east-1".parse().unwrap(),
+            credentials: Credentials::from_profile(Some("bossdb")).unwrap(),
+            // credentials: Credentials::from_env_specific(
+            //     Some("FOO"),
+            //     Some("BAR"),
+            //     None,
+            //     None,
+            // )?,
+            bucket: self.bucket_path.to_string(),
+            location_supported: true,
+        };
+
+        // Create the S3 bucket pointer:
+        let bucket = Bucket::new(&s3.bucket, s3.region, s3.credentials).unwrap();
+
+        for (cuboid_index, (start_ind, stop_ind)) in &cuboids {
+            let filename = format!("{}/{}/{}", boss_uri[1], res, cuboid_index);
+            let mut array: Array3<u8>;
+
+            // An inconvenience!
+            // If there are already data stored in this cuboid in S3, we must
+            // unfortunately download the existing data, merge with the new,
+            // and then spit it back up into S3. This means we're paying for
+            // multiple round-trips, so the more of this that can be done in
+            // AWS, the better. (i.e. ideally do this in a Lambda?)
+
+            // TODO: Sure would love to do this with a self.has_data()...
+            // A convenience! We can use the S3Error failure as a fallback
+            // instead of having to check. So at least we only need two round-
+            // trips and not three.
+            let file = bucket.get_object_blocking(filename.to_string());
+            match file {
+                Ok(data) => {
+                    if data.1 > 299 {
+                        array = Array::zeros((
+                            self.cuboid_size.z as usize,
+                            self.cuboid_size.y as usize,
+                            self.cuboid_size.x as usize,
+                        ));
+                    } else {
+                        array = Array::from_shape_vec(
+                            (
+                                self.cuboid_size.z as usize,
+                                self.cuboid_size.y as usize,
+                                self.cuboid_size.x as usize,
+                            ),
+                            data.0,
+                        )
+                        .unwrap();
+                    }
+                    // Now we can combine and put it back.
+                }
+                Err(_) => {
+                    // We couldn't find the data in S3 already, so we can just
+                    // create an empty array:
+                    array = Array::zeros((
+                        self.cuboid_size.z as usize,
+                        self.cuboid_size.y as usize,
+                        self.cuboid_size.x as usize,
+                    ));
+                    // Now we can combine and put it back.
+                }
+            }
+
+            // Get the coordinates of this cuboid out of the cutout volume:
+            let z_start = ((cuboid_index.z * self.cuboid_size.z) + start_ind.z) - origin.z;
+            let z_stop = ((cuboid_index.z * self.cuboid_size.z) + stop_ind.z) - origin.z;
+            let y_start = ((cuboid_index.y * self.cuboid_size.y) + start_ind.y) - origin.y;
+            let y_stop = ((cuboid_index.y * self.cuboid_size.y) + stop_ind.y) - origin.y;
+            let x_start = ((cuboid_index.x * self.cuboid_size.x) + start_ind.x) - origin.x;
+            let x_stop = ((cuboid_index.x * self.cuboid_size.x) + stop_ind.x) - origin.x;
+
+            // Write cuboid to the array:
+            array
+                .slice_mut(s![
+                    start_ind.z as usize..stop_ind.z as usize,
+                    start_ind.y as usize..stop_ind.y as usize,
+                    start_ind.x as usize..stop_ind.x as usize
+                ])
+                .assign(&data.slice(s![
+                    z_start as usize..z_stop as usize,
+                    y_start as usize..y_stop as usize,
+                    x_start as usize..x_stop as usize,
+                ]));
+
+            // Write cuboid to S3:
+            // TODO: Handle error
+            let put_result = bucket.put_object_blocking(
+                &filename.to_string(),
+                &array.into_raw_vec(),
+                "application/blosc",
+            );
+            match put_result {
+                Ok(result) => println!("{}", str::from_utf8(&result.0).unwrap()),
+                Err(why) => println!("{}", why),
+            }
+        }
+        return true;
+    }
+
+    fn get_next_layer(&self) -> &dyn DataManager {
+        return self.next_layer.as_ref();
     }
 }

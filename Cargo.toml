@@ -14,6 +14,7 @@ ndarray = "0.13.0"
 reqwest = { version = "0.10.4", features = ["blocking"] }
 rocket = "0.4.4"
 rocket_codegen = "0.4.4"
+rust-s3 = {version = "0.22.12", features = ["no-verify-ssl"]}
 serde = {version = "1.0.105", features=["derive"]}
 serde_derive = "1.0.105"
 
