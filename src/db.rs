@@ -1,9 +1,29 @@
+/*
+
+Copyright 2020 The Johns Hopkins University Applied Physics Laboratory
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
+
 /// SQL database module.
 pub mod models;
 pub mod schema;
 
 extern crate chrono;
 extern crate diesel;
+use super::config;
+use super::usage_tracker::UsageTracker;
 use chrono::prelude::*;
 use diesel::prelude::*;
 use models::{CacheRoot, Cuboid, NewCacheRoot, NewCuboid};
@@ -14,8 +34,6 @@ use std::option::Option;
 use std::path::Path;
 use std::rc::Rc;
 use std::result::Result;
-use super::config;
-use super::usage_tracker::UsageTracker;
 
 #[cfg(test)]
 pub mod tests;
@@ -87,7 +105,7 @@ pub struct MaxCountLruStrategy {
     /// Current number of cuboids stored in the cache.
     num_cuboids: u32,
     /// Find cuboids based on least recently used.
-    finder: Rc::<RefCell::<dyn LeastRecentlyUsed>>,
+    finder: Rc<RefCell<dyn LeastRecentlyUsed>>,
 }
 
 impl Scheduling for MaxCountLruStrategy {
@@ -137,7 +155,10 @@ impl Selection for MaxCountLruStrategy {
 }
 
 impl MaxCountLruStrategy {
-    pub fn new(max_cuboids: u32, finder: Rc::<RefCell::<dyn LeastRecentlyUsed>>) -> MaxCountLruStrategy {
+    pub fn new(
+        max_cuboids: u32,
+        finder: Rc<RefCell<dyn LeastRecentlyUsed>>,
+    ) -> MaxCountLruStrategy {
         let num_cuboids = 0;
 
         MaxCountLruStrategy {
@@ -151,7 +172,7 @@ impl MaxCountLruStrategy {
 /// Do simple cache management with cache data backed by SQLite.
 pub struct SimpleCacheManager {
     /// All DB accesses use this object.
-    db: Rc::<RefCell::<SqliteCacheInterface>>,
+    db: Rc<RefCell<SqliteCacheInterface>>,
     /// Cache management strategy implementation (keep no more than _n_ files; remove least recently used).
     strategy: MaxCountLruStrategy,
 }
@@ -171,11 +192,11 @@ impl UsageTracker for SimpleCacheManager {
 }
 
 impl SimpleCacheManager {
-    pub fn new(db: Rc::<RefCell::<SqliteCacheInterface>>, strategy: MaxCountLruStrategy) -> SimpleCacheManager {
-        SimpleCacheManager {
-            db,
-            strategy,
-        }
+    pub fn new(
+        db: Rc<RefCell<SqliteCacheInterface>>,
+        strategy: MaxCountLruStrategy,
+    ) -> SimpleCacheManager {
+        SimpleCacheManager { db, strategy }
     }
 }
 
@@ -240,7 +261,10 @@ impl SqliteCacheInterface {
     ///
     /// * `connection` - Open Sqlite connection
     /// * `file_remover` - Used to remove cuboids from the file system.
-    fn init(connection: SqliteConnection, file_remover: Rc<dyn FileRemover>) -> SqliteCacheInterface {
+    fn init(
+        connection: SqliteConnection,
+        file_remover: Rc<dyn FileRemover>,
+    ) -> SqliteCacheInterface {
         let cache_root_id = SqliteCacheInterface::get_cache_root_id(&connection);
         let mut cache_root_map = HashMap::new();
         cache_root_map.insert(cache_root_id, config::CUBOID_ROOT_PATH.to_string());
@@ -359,7 +383,7 @@ impl SqliteCacheInterface {
             Err(err) => {
                 println!("Error updating DB: {}", err);
                 false
-            },
+            }
             Ok(num_rows) => {
                 if num_rows > 0 {
                     return false;
@@ -390,8 +414,7 @@ impl SqliteCacheInterface {
     /// * `cuboid_id` - Cuboid's id in the DB
     fn remove_cuboid_entry(&self, cuboid_id: i64) -> QueryResult<()> {
         use schema::cuboids::dsl::*;
-        diesel::delete(cuboids.filter(id.eq(cuboid_id)))
-            .execute(&self.connection)?;
+        diesel::delete(cuboids.filter(id.eq(cuboid_id))).execute(&self.connection)?;
         Ok(())
     }
 
