@@ -1,9 +1,27 @@
-use crate::db::models::Cuboid;
-use crate::db::{LeastRecentlyUsed, schema};
+/*
+
+Copyright 2020 The Johns Hopkins University Applied Physics Laboratory
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
+
+use super::SqlCacheInterfaceTestItems;
 use crate::config;
+use crate::db::models::Cuboid;
+use crate::db::{schema, LeastRecentlyUsed};
 use chrono::prelude::*;
 use diesel::prelude::*;
-use super::{SqlCacheInterfaceTestItems};
 
 #[test]
 fn test_log_new_request() {
@@ -28,8 +46,14 @@ fn test_log_repeated_request() {
 
     let SqlCacheInterfaceTestItems { sql_mgr, .. } = super::setup_db();
     let key = "/my_key";
-    assert_eq!(true, sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key)));
-    assert_eq!(false, sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key)));
+    assert_eq!(
+        true,
+        sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key))
+    );
+    assert_eq!(
+        false,
+        sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key))
+    );
     assert_eq!(
         Ok((key.to_string(), 2)),
         cuboids
@@ -114,7 +138,10 @@ fn test_remove_cuboid_entry() {
 
     let SqlCacheInterfaceTestItems { sql_mgr, .. } = super::setup_db();
     let key = "/new_key";
-    assert_eq!(true, sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key)));
+    assert_eq!(
+        true,
+        sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key))
+    );
 
     let row = sql_mgr.find_lru(1);
 
@@ -129,13 +156,19 @@ fn test_remove_cuboid_entry() {
 
 #[test]
 fn test_clean_cache() {
-    let SqlCacheInterfaceTestItems { mut sql_mgr, remove_calls } = super::setup_db();
+    let SqlCacheInterfaceTestItems {
+        mut sql_mgr,
+        remove_calls,
+    } = super::setup_db();
     let key1 = "/oldest_key";
     let full_key1 = format!("{}{}", config::CUBOID_ROOT_PATH, key1);
     assert_eq!(true, sql_mgr.log_request(full_key1.to_string()));
 
     let key2 = "/not_as_old_key";
-    assert_eq!(true, sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key2)));
+    assert_eq!(
+        true,
+        sql_mgr.log_request(format!("{}{}", config::CUBOID_ROOT_PATH, key2))
+    );
 
     let row = sql_mgr.find_lru(1);
     assert_eq!(key1, row[0].cube_key);

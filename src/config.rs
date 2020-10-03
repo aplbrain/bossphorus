@@ -1,3 +1,21 @@
+/*
+
+Copyright 2020 The Johns Hopkins University Applied Physics Laboratory
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
+
 /// Configuration module.
 ///
 /// Gets custom config values from environment variables and the
@@ -25,13 +43,13 @@ pub fn get_cuboid_root_abs_path() -> String {
         Err(_) => {
             fs::create_dir_all(CUBOID_ROOT_PATH)
                 .expect(&format!("Couldn't create {}", CUBOID_ROOT_PATH));
-            return get_cuboid_root_abs_path()
-        },
+            return get_cuboid_root_abs_path();
+        }
     };
     return match path_str.as_path().to_str() {
         Some(s) => s.to_string(),
         None => panic!("Non-unicode path given"),
-    }
+    };
 }
 
 /// The Boss host to talk to.
@@ -48,17 +66,17 @@ pub fn get_boss_host(rocket: Rocket) -> Result<Rocket, Rocket> {
     match env::var(BOSSHOST_ENV_NAME) {
         Ok(val) => boss_host = val,
         Err(_) => {
-            boss_host = rocket.config()
+            boss_host = rocket
+                .config()
                 .get_str(BOSSHOST_ROCKET_CFG)
                 .unwrap_or(BOSSHOST_DEFAULT)
                 .to_string();
-        },
+        }
     }
     // ToDo: make this visible to the user in a better place.
     println!("Boss host: {}", boss_host);
     Ok(rocket.manage(BossHost(boss_host)))
 }
-
 
 /// Boss token used for auth.
 pub struct BossToken(pub String);
@@ -74,11 +92,12 @@ pub fn get_boss_token(rocket: Rocket) -> Result<Rocket, Rocket> {
     match env::var(BOSSTOKEN_ENV_NAME) {
         Ok(val) => boss_token = val,
         Err(_) => {
-            boss_token = rocket.config()
+            boss_token = rocket
+                .config()
                 .get_str(BOSSTOKEN_ROCKET_CFG)
                 .unwrap_or(BOSSTOKEN_DEFAULT)
                 .to_string();
-        },
+        }
     }
     Ok(rocket.manage(BossToken(boss_token)))
 }
@@ -102,11 +121,12 @@ pub fn get_usage_tracker(rocket: Rocket) -> Result<Rocket, Rocket> {
     match env::var(USAGE_TRACKER_ENV_NAME) {
         Ok(val) => usage_tracker = val,
         Err(_) => {
-            usage_tracker = rocket.config()
+            usage_tracker = rocket
+                .config()
                 .get_str(USAGE_TRACKER_ROCKET_CFG)
                 .unwrap_or(USAGE_TRACKER_DEFAULT)
                 .to_string();
-        },
+        }
     }
     Ok(rocket.manage(UsageTracker(usage_tracker)))
 }

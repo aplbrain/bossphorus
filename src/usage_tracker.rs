@@ -1,3 +1,22 @@
+/*
+
+Copyright 2020 The Johns Hopkins University Applied Physics Laboratory
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
+
+use super::config::{CONSOLE_TRACKER, DB_TRACKER, DB_URL, NONE_TRACKER};
 /// Usage Tracker module.
 ///
 /// Tracks usage of the cached cuboids stored locally on disk.
@@ -5,7 +24,6 @@
 /// A single thread receives keys from the Rocket worker threads as cuboids are
 /// accessed.
 use super::db::{MaxCountLruStrategy, SimpleCacheManager, SqliteCacheInterface};
-use super::config::{NONE_TRACKER, CONSOLE_TRACKER, DB_TRACKER, DB_URL};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync;
