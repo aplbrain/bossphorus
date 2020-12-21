@@ -10,6 +10,8 @@ This is a partial reimplementation of the BossDB REST API in [Rust](https://www.
 
 
 ## Why?
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Faplbrain%2Fbossphorus.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Faplbrain%2Fbossphorus?ref=badge_shield)
+
 
 bossphorus simplifies data-access patterns for data that do not fit into RAM. When you write a 100-gigabyte file, bossphorus automatically slices your dataset up to fit in bite-sized pieces.
 
@@ -95,3 +97,7 @@ cargo build --release
 ```
 
 The binary will be at `target/release/bossphorus`.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Faplbrain%2Fbossphorus.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Faplbrain%2Fbossphorus?ref=badge_large)
